@@ -42,8 +42,13 @@ class Settings(BaseSettings):
 
     # AI Provider (openai-compatible). Leave blank to use the offline heuristic assistant.
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_MODEL: str = "gpt-5.4-nano"
     AI_PROVIDER: str = "stub"  # "stub" or "openai"
+
+    # Sarvam AI speech-to-text translation (Indic audio -> English text)
+    SARVAM_API_KEY: Optional[str] = None
+    SARVAM_STT_MODEL: str = "saaras:v3"
+    SARVAM_API_BASE_URL: str = "https://api.sarvam.ai"
 
     # OCR
     OCR_PROVIDER: str = "stub"  # "stub" or "google_vision"

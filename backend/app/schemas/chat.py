@@ -16,7 +16,9 @@ class ChatResponse(BaseModel):
     reply: str
     data: Optional[dict] = None
     action: Optional["ActionProposal"] = None
-    available_actions: List[str] = []
+    available_actions: List[str] = Field(default_factory=list)
+    input_transcript: Optional[str] = None
+    detected_language: Optional[str] = None
 
 
 class ActionProposal(BaseModel):
