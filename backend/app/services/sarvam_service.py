@@ -26,18 +26,25 @@ def translate_audio(audio: bytes, filename: str, content_type: str, language_cod
     normalized_content_type = content_type.split(";", 1)[0].strip().lower()
     if normalized_content_type not in SUPPORTED_AUDIO_TYPES:
         raise ValueError("Unsupported audio format. Please record WebM, WAV, MP3, AAC, FLAC, OGG, or M4A audio.")
-    try:
-        with httpx.Client(timeout=35.0) as client:
-            response = client.post(
+    requested_language = language_code if language_code in {"hi-IN", "mr-IN", "en-IN"} else "unknown"
+
+    def request(client: httpx.Client, detected_language: str) -> httpx.Response:
+        return client.post(
                 f"{settings.SARVAM_API_BASE_URL.rstrip('/')}/speech-to-text",
                 headers={"api-subscription-key": settings.SARVAM_API_KEY},
                 files={"file": (filename or "recording.webm", audio, normalized_content_type)},
                 data={
                     "model": settings.SARVAM_STT_MODEL,
                     "mode": "translate",
-                    "language_code": language_code if language_code in {"hi-IN", "mr-IN", "en-IN"} else "unknown",
+                    "language_code": detected_language,
                 },
             )
+
+    try:
+        with httpx.Client(timeout=35.0) as client:
+            response = request(client, requested_language)
+            if response.is_success and not str(response.json().get("transcript") or "").strip() and requested_language != "unknown":
+                response = request(client, "unknown")
     except httpx.RequestError as exc:
         raise SarvamUnavailable("Sarvam speech translation could not be reached.") from exc
     if response.status_code == 429:
@@ -52,7 +59,7 @@ def translate_audio(audio: bytes, filename: str, content_type: str, language_cod
     data = response.json()
     transcript = str(data.get("transcript") or "").strip()
     if not transcript:
-        raise ValueError("No clear speech was detected. Please try again.")
+        raise ValueError("No microphone speech was detected. Check that Windows is using the correct input microphone, speak close to it for 3–10 seconds, and try again.")
     return {
         "transcript": transcript,
         "language_code": data.get("language_code") or language_code,

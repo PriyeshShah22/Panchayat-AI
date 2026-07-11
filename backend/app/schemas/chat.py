@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     language: str = Field(default="en", max_length=12)
     history: Optional[List[dict]] = None  # [{"role": "user"|"assistant", "content": "..."}]
+    conversation_summary: Optional[str] = Field(default=None, max_length=2000)
 
 
 class ChatResponse(BaseModel):
@@ -19,6 +20,8 @@ class ChatResponse(BaseModel):
     available_actions: List[str] = Field(default_factory=list)
     input_transcript: Optional[str] = None
     detected_language: Optional[str] = None
+    conversation_summary: Optional[str] = None
+    memory_messages: List[dict] = Field(default_factory=list)
 
 
 class ActionProposal(BaseModel):

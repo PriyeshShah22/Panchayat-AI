@@ -1,4 +1,5 @@
 """AI assistant endpoint."""
+import json
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from openai import APIConnectionError, APIStatusError, RateLimitError
 from sqlalchemy.orm import Session
@@ -18,7 +19,7 @@ def chat(payload: ChatRequest,
          db: Session = Depends(get_db),
          current: User = Depends(get_current_user)) -> ChatResponse:
     try:
-        result = ai_chat(db, current, payload.message, payload.language)
+        result = ai_chat(db, current, payload.message, payload.language, payload.history, payload.conversation_summary)
         return ChatResponse(**result)
     except RateLimitError as exc:
         raise HTTPException(status_code=429, detail="The AI service is busy. Please try again shortly.") from exc
@@ -30,6 +31,8 @@ def chat(payload: ChatRequest,
 async def voice(
     audio: UploadFile = File(...),
     language: str = Form("unknown"),
+    history: str = Form("[]"),
+    conversation_summary: str = Form(""),
     db: Session = Depends(get_db),
     current: User = Depends(get_current_user),
 ) -> ChatResponse:
@@ -37,7 +40,11 @@ async def voice(
     raw = await audio.read()
     try:
         translated = translate_audio(raw, audio.filename or "recording.webm", content_type, language)
-        result = ai_chat(db, current, translated["transcript"], translated["language_code"])
+        try:
+            parsed_history = json.loads(history)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Invalid conversation history.") from exc
+        result = ai_chat(db, current, translated["transcript"], translated["language_code"], parsed_history, conversation_summary or None)
         result["input_transcript"] = translated["transcript"]
         result["detected_language"] = translated["language_code"]
         return ChatResponse(**result)
