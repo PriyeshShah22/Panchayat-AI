@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { api } from "../api/client";
 
 export interface AuthUser {
   id: number;
@@ -30,7 +29,6 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => set({ user }),
       logout: () => {
         set({ accessToken: null, refreshToken: null, user: null });
-        try { api.post("/auth/logout-stub", {}); } catch { /* ignore */ }
       },
     }),
     { name: "smart-society-auth" }

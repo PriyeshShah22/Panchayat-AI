@@ -10,9 +10,9 @@ from . import user, society, resident, complaint, visitor, bill, notice, audit, 
 from .user import User, Role, Permission, UserRole  # noqa: F401
 from .society import Society, Block, Flat  # noqa: F401
 from .resident import Resident  # noqa: F401
-from .complaint import Complaint, ComplaintCategory, ComplaintComment  # noqa: F401
+from .complaint import Complaint, ComplaintCategory, ComplaintComment, ComplaintEvent  # noqa: F401
 from .visitor import Visitor, VisitorLog  # noqa: F401
-from .bill import Bill, Payment  # noqa: F401
+from .bill import Bill, BillLineItem, Payment, PaymentAttempt  # noqa: F401
 from .notice import Notice  # noqa: F401
 from .audit import AuditLog  # noqa: F401
 from .chat import ChatMessage  # noqa: F401

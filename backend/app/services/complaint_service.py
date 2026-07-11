@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
-from app.models.complaint import Complaint, ComplaintCategory, ComplaintPriority, ComplaintStatus
+from app.models.complaint import Complaint, ComplaintCategory, ComplaintEvent, ComplaintPriority, ComplaintStatus
 from app.models.user import User
 from app.schemas.complaint import ComplaintCreate
 
@@ -30,6 +30,8 @@ def classify_complaint(text: str) -> str:
 
 
 def create_complaint(db: Session, actor: User, payload: ComplaintCreate, *, source: str = "manual") -> Complaint:
+    if "resident" not in actor.role_names or not actor.resident or not actor.society_id:
+        raise PermissionError("Only an approved resident linked to a household can submit a complaint")
     try:
         priority = ComplaintPriority(payload.priority)
     except ValueError as exc:
@@ -47,17 +49,20 @@ def create_complaint(db: Session, actor: User, payload: ComplaintCreate, *, sour
     complaint = Complaint(
         title=payload.title,
         description=payload.description,
-        society_id=payload.society_id,
-        flat_id=payload.flat_id,
+        society_id=actor.society_id,
+        flat_id=actor.resident.flat_id,
         reporter_id=actor.id,
         category_id=category_id,
         priority=priority,
-        status=ComplaintStatus.open,
+        status=ComplaintStatus.submitted,
         photo_url=payload.photo_url,
         ai_suggested_category=suggested,
     )
     db.add(complaint)
     db.flush()
+    db.add(ComplaintEvent(complaint_id=complaint.id, actor_id=actor.id,
+                          from_status=None, to_status=ComplaintStatus.submitted.value,
+                          reason="Complaint submitted"))
     db.add(AuditLog(
         actor_id=actor.id,
         action="complaint_create",

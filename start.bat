@@ -31,6 +31,7 @@ if not exist "frontend-web\node_modules" (
 
 echo [SETUP] Preparing the development database...
 pushd "backend"
+".venv\Scripts\python.exe" "scripts\migrate.py" || (popd & goto :failed)
 ".venv\Scripts\python.exe" "scripts\seed.py" || (popd & goto :failed)
 popd
 

@@ -30,6 +30,9 @@ export interface Bill {
   society_id: number;
   flat_id: number;
   resident_id: number | null;
+  billed_user_id: number | null;
+  billing_year: number | null;
+  billing_month: number | null;
   bill_number: string;
   title: string;
   description?: string | null;
@@ -42,6 +45,8 @@ export interface Bill {
   due_date: string;
   paid_at?: string | null;
   created_at: string;
+  line_items: { id: number; code: string; label: string; amount: number }[];
+  billed_user?: { id: number; full_name: string; email: string } | null;
 }
 
 export interface Complaint {
@@ -60,6 +65,9 @@ export interface Complaint {
   created_at: string;
   updated_at: string;
   resolved_at?: string | null;
+  reporter?: { id: number; full_name: string; email: string; phone?: string | null } | null;
+  assignee?: { id: number; full_name: string; email: string; phone?: string | null } | null;
+  events: { id: number; actor_id: number; from_status?: string | null; to_status: string; reason?: string | null; created_at: string }[];
 }
 
 export interface Visitor {

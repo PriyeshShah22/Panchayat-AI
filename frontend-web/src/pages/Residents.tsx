@@ -1,5 +1,8 @@
-import { Box, Grid, Paper, Stack, Typography, Chip } from "@mui/material";
-import { useQuery } from "@tanstack/react-query";
+import { Alert, Avatar, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Grid, Paper, Stack, TextField, Typography } from "@mui/material";
+import { AdminPanelSettingsRounded, GroupsRounded, ManageAccountsRounded, PersonRounded, SecurityRounded } from "@mui/icons-material";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { enqueueSnackbar } from "notistack";
 import { api } from "../api/client";
 import { useAuthStore } from "../store/auth";
 import { LoadingPanel } from "../components/StateViews";
@@ -7,58 +10,20 @@ import { KpiCard } from "../components/KpiCard";
 import type { User } from "../types/api";
 
 export default function Residents() {
-  const me = useAuthStore((s) => s.user);
-  const users = useQuery({
-    queryKey: ["users"],
-    queryFn: async () => (await api.get<User[]>("/admin/users?limit=100")).data,
-    enabled: !!(me?.is_superuser || (me?.roles || []).some((r) => ["admin", "committee"].includes(r.name))),
-  });
-
+  const me = useAuthStore((state) => state.user); const admin = Boolean(me?.is_superuser || me?.roles.some((role) => role.name === "admin"));
+  const [search, setSearch] = useState(""); const [selected, setSelected] = useState<User | null>(null);
+  const users = useQuery({ queryKey: ["users"], queryFn: async () => (await api.get<User[]>("/admin/users?limit=200")).data, enabled: Boolean(me?.is_superuser || me?.roles.some((role) => ["admin", "committee"].includes(role.name))) });
   if (users.isLoading) return <LoadingPanel />;
-
-  return (
-    <Box>
-      <Typography variant="h4">Residents Directory</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Society members and their roles.
-      </Typography>
-
-      <Grid container spacing={2}>
-        <Grid item xs={12} sm={4}>
-          <KpiCard title="Total users" value={users.data?.length ?? 0} color="#0F62FE" />
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <KpiCard title="Admins" value={(users.data || []).filter((u) => u.roles.some((r) => r.name === "admin")).length} color="#7C4DFF" />
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <KpiCard title="Residents" value={(users.data || []).filter((u) => u.roles.some((r) => r.name === "resident")).length} color="#00B894" />
-        </Grid>
-
-        <Grid item xs={12}>
-          <Stack spacing={1}>
-            {(users.data || []).map((u) => (
-              <Paper key={u.id} sx={{ p: 2, borderRadius: 3 }}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center">
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                      {u.full_name}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {u.email} · {u.phone || "no phone"} · joined {new Date(u.created_at).toLocaleDateString()}
-                    </Typography>
-                  </Box>
-                  <Stack direction="row" spacing={1}>
-                    {u.roles.map((r) => (
-                      <Chip key={r.id} label={r.name} size="small" color="primary" variant="outlined" />
-                    ))}
-                    {u.is_superuser && <Chip label="superuser" size="small" color="secondary" />}
-                  </Stack>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </Grid>
-      </Grid>
-    </Box>
-  );
+  const filtered = (users.data ?? []).filter((user) => `${user.full_name} ${user.email} ${user.phone || ""}`.toLowerCase().includes(search.toLowerCase()));
+  return <Stack spacing={3}><Box><Typography variant="overline" color="primary" fontWeight={900}>PEOPLE & ACCESS</Typography><Typography variant="h2" sx={{ fontSize: { xs: "2.4rem", md: "3.5rem" } }}>Residents directory</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>Find society members and manage trusted responsibilities without exposing account credentials.</Typography></Box>
+    <Grid container spacing={2}><Grid item xs={12} sm={4}><KpiCard title="Total users" value={users.data?.length ?? 0} color="#0F62FE" /></Grid><Grid item xs={12} sm={4}><KpiCard title="Admins" value={(users.data || []).filter((u) => u.roles.some((r) => r.name === "admin")).length} color="#7C4DFF" /></Grid><Grid item xs={12} sm={4}><KpiCard title="Committee" value={(users.data || []).filter((u) => u.roles.some((r) => r.name === "committee")).length} color="#00B894" /></Grid></Grid>
+    <TextField value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, email, or phone" />
+    <Stack spacing={1.5}>{filtered.map((user) => <Paper key={user.id} sx={{ p: 2.5 }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} spacing={2}><Stack direction="row" spacing={1.5} alignItems="center"><Avatar sx={{ bgcolor: "primary.main" }}>{user.full_name[0]}</Avatar><Box><Typography fontWeight={850}>{user.full_name}</Typography><Typography variant="body2" color="text.secondary">{user.email} · {user.phone || "No phone"}</Typography></Box></Stack><Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}><Stack direction="row" spacing={.75} flexWrap="wrap">{user.roles.map((role) => <Chip key={role.id} size="small" label={role.name} color={role.name === "admin" ? "secondary" : role.name === "committee" ? "primary" : "default"} />)}</Stack>{admin && <Button size="small" startIcon={<ManageAccountsRounded />} onClick={() => setSelected(user)}>Manage roles</Button>}</Stack></Stack></Paper>)}</Stack>
+    {filtered.length === 0 && <Alert severity="info">No residents match that search.</Alert>}
+    <RoleDialog user={selected} onClose={() => setSelected(null)} />
+  </Stack>;
 }
+
+function RoleDialog({ user, onClose }: { user: User | null; onClose: () => void }) { const qc = useQueryClient(); const [permanentAdmin, setPermanentAdmin] = useState(false); const mutation = useMutation({ mutationFn: async ({ role, add }: { role: string; add: boolean }) => add ? api.post(`/admin/users/${user!.id}/roles/${role}`) : api.delete(`/admin/users/${user!.id}/roles/${role}`), onSuccess: async () => { enqueueSnackbar("Roles updated", { variant: "success" }); setPermanentAdmin(false); await qc.invalidateQueries({ queryKey: ["users"] }); onClose(); }, onError: (error: any) => enqueueSnackbar(error?.response?.data?.detail || "Role could not be changed", { variant: "error" }) }); if (!user) return null; const has = (role: string) => user.roles.some((item) => item.name === role); return <Dialog open onClose={onClose} fullWidth maxWidth="xs"><DialogTitle>Manage {user.full_name}</DialogTitle><DialogContent><Stack spacing={1.5} sx={{ mt: 1 }}><RoleRow icon={<AdminPanelSettingsRounded />} title="Administrator" detail="Full society administration. Cannot be removed in the app." active={has("admin")} onAdd={() => setPermanentAdmin(true)} permanent /><RoleRow icon={<GroupsRounded />} title="Committee" detail="Can triage complaints, bills, notices, and reports." active={has("committee")} onAdd={() => mutation.mutate({ role: "committee", add: true })} onRemove={() => mutation.mutate({ role: "committee", add: false })} /><RoleRow icon={<SecurityRounded />} title="Security" detail="Can manage gate and visitor operations." active={has("security")} onAdd={() => mutation.mutate({ role: "security", add: true })} onRemove={() => mutation.mutate({ role: "security", add: false })} /><RoleRow icon={<PersonRounded />} title="Resident" detail="Can use personal household services." active={has("resident")} onAdd={() => mutation.mutate({ role: "resident", add: true })} onRemove={() => mutation.mutate({ role: "resident", add: false })} /></Stack>{permanentAdmin && <Alert severity="warning" sx={{ mt: 2 }}>Admin access is permanent through this application. Confirm only if this person should have full administrative control.<Stack direction="row" spacing={1} sx={{ mt: 1.5 }}><Button size="small" color="inherit" onClick={() => setPermanentAdmin(false)}>Cancel</Button><Button size="small" variant="contained" color="warning" onClick={() => mutation.mutate({ role: "admin", add: true })}>Grant permanent admin</Button></Stack></Alert>}</DialogContent><DialogActions><Button onClick={onClose}>Done</Button></DialogActions></Dialog>; }
+
+function RoleRow({ icon, title, detail, active, permanent, onAdd, onRemove }: { icon: React.ReactNode; title: string; detail: string; active: boolean; permanent?: boolean; onAdd: () => void; onRemove?: () => void }) { return <Paper variant="outlined" sx={{ p: 2 }}><Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ color: active ? "primary.main" : "text.secondary" }}>{icon}</Box><Box sx={{ flex: 1 }}><Typography fontWeight={800}>{title}</Typography><Typography variant="caption" color="text.secondary">{detail}</Typography></Box>{active ? permanent ? <Chip size="small" label="Permanent" /> : <Button size="small" color="error" onClick={onRemove}>Remove</Button> : <Button size="small" onClick={onAdd}>Promote</Button>}</Stack></Paper>; }

@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     SARVAM_STT_MODEL: str = "saaras:v3"
     SARVAM_API_BASE_URL: str = "https://api.sarvam.ai"
 
+    # Razorpay UPI checkout. Online payment stays disabled until all are set.
+    RAZORPAY_KEY_ID: Optional[str] = None
+    RAZORPAY_KEY_SECRET: Optional[str] = None
+    RAZORPAY_WEBHOOK_SECRET: Optional[str] = None
+    RAZORPAY_API_BASE_URL: str = "https://api.razorpay.com/v1"
+
     # OCR
     OCR_PROVIDER: str = "stub"  # "stub" or "google_vision"
     GOOGLE_VISION_API_KEY: Optional[str] = None

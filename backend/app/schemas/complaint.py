@@ -22,20 +22,38 @@ class CategoryOut(BaseModel):
 class ComplaintCreate(BaseModel):
     title: str
     description: str
-    society_id: int
-    flat_id: Optional[int] = None
     category_id: Optional[int] = None
     priority: str = "medium"
     photo_url: Optional[str] = None
 
 
 class ComplaintUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
     priority: Optional[str] = None
     assignee_id: Optional[int] = None
     category_id: Optional[int] = None
+
+
+class ComplaintTransition(BaseModel):
+    status: str
+    reason: Optional[str] = None
+
+
+class ComplaintPersonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    full_name: str
+    email: str
+    phone: Optional[str] = None
+
+
+class ComplaintEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    actor_id: int
+    from_status: Optional[str] = None
+    to_status: str
+    reason: Optional[str] = None
+    created_at: datetime
 
 
 class ComplaintOut(BaseModel):
@@ -55,6 +73,9 @@ class ComplaintOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     resolved_at: Optional[datetime] = None
+    reporter: Optional[ComplaintPersonOut] = None
+    assignee: Optional[ComplaintPersonOut] = None
+    events: List[ComplaintEventOut] = []
 
 
 class ComplaintCommentCreate(BaseModel):

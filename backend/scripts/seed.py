@@ -17,7 +17,7 @@ from app.models.resident import Resident
 from app.models.society import Block, Flat, Society
 from app.models.user import Permission, Role, User, UserStatus
 from app.models.visitor import Visitor, VisitorStatus
-from app.services.billing_service import generate_monthly_bills
+from app.services.billing_service import create_user_bill
 
 
 def upsert_role(db, name: str, description: str = "") -> Role:
@@ -185,7 +185,7 @@ def main() -> None:
                 description="Lift has been stuck on 3rd floor since morning.",
                 society_id=soc.id, flat_id=flats[6].id,
                 reporter_id=ravi.id,
-                status=ComplaintStatus.open,
+                status=ComplaintStatus.submitted,
                 priority=ComplaintPriority.urgent,
             ))
 
@@ -209,9 +209,13 @@ def main() -> None:
                            purpose="Personal visit", vehicle_number="MH12AB1234",
                            status=VisitorStatus.approved))
 
-        # Monthly bills — only if no bills exist yet
+        # One idempotent demo bill. Real monthly bills are entered by an admin per resident.
         if not db.query(Bill).first():
-            generate_monthly_bills(db, soc.id)
+            create_user_bill(db, society_id=soc.id, billed_user=resident_admin,
+                billing_year=date.today().year, billing_month=date.today().month,
+                due_date=date.today() + timedelta(days=15), maintenance_amount=1800,
+                water_amount=400, electricity_amount=300,
+                description="Demonstration bill with itemized society charges")
 
         db.commit()
         # Keep console output compatible with the default Windows code page.

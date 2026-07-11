@@ -1,178 +1,38 @@
-import {
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  Stack,
-  TextField,
-  Typography,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from "@mui/material";
-import DownloadIcon from "@mui/icons-material/Download";
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, LinearProgress, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { AccountBalanceWalletRounded, AddRounded, CalendarMonthRounded, CheckCircleRounded, DownloadRounded, ElectricBoltRounded, PaymentsRounded, WaterDropRounded } from "@mui/icons-material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import dayjs from "dayjs";
 import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { api } from "../api/client";
-import { DataTable, type Column } from "../components/Table";
-import { LoadingPanel } from "../components/StateViews";
-import type { Bill } from "../types/api";
+import { useAuthStore } from "../store/auth";
+import type { Bill, User } from "../types/api";
 
 export default function Bills() {
-  const qc = useQueryClient();
-  const [payOpen, setPayOpen] = useState<Bill | null>(null);
-  const [payAmount, setPayAmount] = useState(0);
-  const [payMethod, setPayMethod] = useState("upi");
-  const [payRef, setPayRef] = useState("");
+  const me = useAuthStore((state) => state.user); const roles = me?.roles.map((role) => role.name) ?? [];
+  const manager = Boolean(me?.is_superuser || roles.some((role) => ["admin", "committee"].includes(role))); const admin = Boolean(me?.is_superuser || roles.includes("admin"));
+  const [createOpen, setCreateOpen] = useState(false); const qc = useQueryClient();
+  const bills = useQuery({ queryKey: ["bills"], queryFn: async () => (await api.get<Bill[]>("/bills/?limit=200")).data });
+  const paymentConfig = useQuery({ queryKey: ["payment-config"], queryFn: async () => (await api.get("/bills/payment-config")).data });
+  const users = useQuery({ queryKey: ["billing-users"], queryFn: async () => (await api.get<User[]>("/admin/users?limit=200")).data, enabled: admin });
+  const rows = bills.data ?? []; const outstanding = rows.reduce((sum, bill) => sum + Math.max(0, bill.total_amount - bill.paid_amount), 0); const unpaid = rows.filter((bill) => bill.status !== "paid"); const current = unpaid[0] || rows[0];
+  const refresh = async () => { await qc.invalidateQueries({ queryKey: ["bills"] }); };
 
-  const list = useQuery({
-    queryKey: ["bills"],
-    queryFn: async () => (await api.get<Bill[]>("/bills/?limit=200")).data,
-  });
-
-  const pay = useMutation({
-    mutationFn: async ({ id, payload }: { id: number; payload: any }) =>
-      (await api.post(`/bills/${id}/pay`, payload)).data,
-    onSuccess: () => {
-      enqueueSnackbar("Payment recorded", { variant: "success" });
-      qc.invalidateQueries({ queryKey: ["bills"] });
-      setPayOpen(null);
-    },
-    onError: (err: any) => enqueueSnackbar(err?.response?.data?.detail || "Payment failed", { variant: "error" }),
-  });
-
-  if (list.isLoading) return <LoadingPanel />;
-
-  const cols: Column<Bill>[] = [
-    { key: "bill_number", header: "Bill #" },
-    { key: "title", header: "Title" },
-    { key: "total_amount", header: "Total (₹)", render: (b) => b.total_amount.toLocaleString("en-IN") },
-    { key: "paid_amount", header: "Paid (₹)", render: (b) => b.paid_amount.toLocaleString("en-IN") },
-    {
-      key: "outstanding",
-      header: "Outstanding",
-      render: (b) => {
-        const o = b.total_amount - b.paid_amount;
-        return (
-          <Chip
-            size="small"
-            color={o > 0 ? "warning" : "success"}
-            label={`₹ ${o.toLocaleString("en-IN")}`}
-          />
-        );
-      },
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (b) => <Chip size="small" label={b.status.toUpperCase()} variant="outlined" />,
-    },
-    { key: "due_date", header: "Due", render: (b) => b.due_date },
-    {
-      key: "actions",
-      header: "Actions",
-      render: (b) => (
-        <Stack direction="row" spacing={1}>
-          <IconButton
-            size="small"
-            onClick={async () => {
-              try {
-                const res = await api.get(`/bills/${b.id}/pdf`, { responseType: "blob" });
-                const url = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${b.bill_number}.pdf`;
-                a.click();
-                window.URL.revokeObjectURL(url);
-              } catch (e: any) {
-                enqueueSnackbar("Could not download PDF", { variant: "error" });
-              }
-            }}
-          >
-            <DownloadIcon fontSize="small" />
-          </IconButton>
-          {b.status !== "paid" && (
-            <Button size="small" variant="outlined" onClick={() => { setPayOpen(b); setPayAmount(Math.max(0, b.total_amount - b.paid_amount)); }}>
-              Pay
-            </Button>
-          )}
-        </Stack>
-      ),
-    },
-  ];
-
-  return (
-    <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-        <Box>
-          <Typography variant="h4">Bills & Maintenance</Typography>
-          <Typography variant="body2" color="text.secondary">
-            View, pay, and download maintenance invoices.
-          </Typography>
-        </Box>
-        <Stack direction="row" spacing={1}>
-          <Button variant="outlined" onClick={() => api.get("/reports/bills.xlsx", { responseType: "blob" }).then((r) => {
-            const url = window.URL.createObjectURL(new Blob([r.data]));
-            const a = document.createElement("a"); a.href = url; a.download = "bills.xlsx"; a.click();
-          })}>
-            Export Excel
-          </Button>
-        </Stack>
-      </Stack>
-      <DataTable data={list.data || []} columns={cols} searchKeys={["bill_number", "title", "status"]} empty="No bills" />
-
-      <Dialog open={Boolean(payOpen)} onClose={() => setPayOpen(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Pay bill {payOpen?.bill_number}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Amount"
-              type="number"
-              value={payAmount}
-              onChange={(e) => setPayAmount(Number(e.target.value))}
-              fullWidth
-            />
-            <TextField
-              label="Method"
-              select
-              SelectProps={{ native: true }}
-              value={payMethod}
-              onChange={(e) => setPayMethod(e.target.value)}
-              fullWidth
-            >
-              <option value="upi">UPI</option>
-              <option value="card">Card</option>
-              <option value="cash">Cash</option>
-              <option value="netbanking">Netbanking</option>
-              <option value="cheque">Cheque</option>
-            </TextField>
-            <TextField
-              label="Transaction reference"
-              value={payRef}
-              onChange={(e) => setPayRef(e.target.value)}
-              fullWidth
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPayOpen(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            disabled={!payAmount || payAmount <= 0 || pay.isPending}
-            onClick={() =>
-              payOpen &&
-              pay.mutate({
-                id: payOpen.id,
-                payload: { amount: payAmount, method: payMethod, transaction_ref: payRef || null },
-              })
-            }
-          >
-            Confirm Payment
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
-  );
+  return <Stack spacing={3}>
+    <Box><Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ md: "end" }} spacing={2}><Box><Typography variant="overline" color="primary" fontWeight={900}>DUES & RECEIPTS</Typography><Typography variant="h2" sx={{ fontSize: { xs: "2.4rem", md: "3.5rem" } }}>{manager ? "Monthly billing" : "Your society dues"}</Typography><Typography color="text.secondary" sx={{ mt: 1 }}>{manager ? "Create one itemized bill per resident and monitor collection." : "See exactly what you owe and pay securely through UPI."}</Typography></Box>{admin && <Button variant="contained" startIcon={<AddRounded />} onClick={() => setCreateOpen(true)}>Create monthly bill</Button>}</Stack></Box>
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}><Metric icon={<AccountBalanceWalletRounded />} label="Outstanding" value={`₹${outstanding.toLocaleString("en-IN")}`} /><Metric icon={<CalendarMonthRounded />} label="Unpaid bills" value={String(unpaid.length)} /><Metric icon={<CheckCircleRounded />} label="Paid bills" value={String(rows.filter((bill) => bill.status === "paid").length)} /></Box>
+    {bills.isLoading && <LinearProgress />}{bills.isError && <Alert severity="error">Bills could not be loaded.</Alert>}
+    {!bills.isLoading && rows.length === 0 && <Paper sx={{ p: 7, textAlign: "center" }}><PaymentsRounded color="disabled" sx={{ fontSize: 60 }} /><Typography variant="h5" sx={{ mt: 1 }}>No dues yet</Typography><Typography color="text.secondary">Monthly bills will appear here after an admin creates them.</Typography></Paper>}
+    {current && <CurrentBill bill={current} canPay={!manager || current.billed_user_id === me?.id} paymentEnabled={Boolean(paymentConfig.data?.razorpay_enabled)} onPaid={refresh} />}
+    {rows.length > 1 && <Box><Typography variant="h5" sx={{ mb: 2 }}>Bill history</Typography><Stack spacing={1.5}>{rows.slice(current ? 1 : 0).map((bill) => <Paper key={bill.id} sx={{ p: 2.5 }}><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} spacing={2}><Box><Typography fontWeight={850}>{bill.title}</Typography><Typography variant="body2" color="text.secondary">{bill.bill_number} · Due {dayjs(bill.due_date).format("DD MMM YYYY")}</Typography></Box><Stack direction="row" spacing={1} alignItems="center"><Chip label={bill.status} color={bill.status === "paid" ? "success" : "warning"} /><Typography variant="h6">₹{bill.total_amount.toLocaleString("en-IN")}</Typography><Download bill={bill} /></Stack></Stack></Paper>)}</Stack></Box>}
+    <CreateBillDialog open={createOpen} onClose={() => setCreateOpen(false)} users={(users.data ?? []).filter((user) => user.roles.some((role) => role.name === "resident"))} onCreated={async () => { setCreateOpen(false); await refresh(); }} />
+  </Stack>;
 }
+
+function CurrentBill({ bill, canPay, paymentEnabled, onPaid }: { bill: Bill; canPay: boolean; paymentEnabled: boolean; onPaid: () => Promise<void> }) { const pay = useMutation({ mutationFn: async () => { const { data: order } = await api.post(`/bills/${bill.id}/payment-order`); await loadRazorpay(); return await new Promise((resolve, reject) => { const checkout = new (window as any).Razorpay({ key: order.key_id, amount: order.amount_paise, currency: "INR", name: "Panchayat", description: bill.title, order_id: order.order_id, prefill: { name: order.resident_name }, theme: { color: "#167D69" }, config: { display: { blocks: { upi: { name: "Pay by UPI", instruments: [{ method: "upi" }] } }, sequence: ["block.upi"], preferences: { show_default_blocks: false } } }, handler: async (response: any) => { try { const result = await api.post("/bills/payments/verify", response); resolve(result.data); } catch (error) { reject(error); } }, modal: { ondismiss: () => reject(new Error("Payment cancelled")) } }); checkout.on("payment.failed", (response: any) => reject(new Error(response.error?.description || "Payment failed"))); checkout.open(); }); }, onSuccess: async () => { enqueueSnackbar("Payment received. Bank confirmation is pending.", { variant: "success" }); await onPaid(); }, onError: (error: any) => { if (error?.message !== "Payment cancelled") enqueueSnackbar(error?.response?.data?.detail || error?.message || "Payment could not start", { variant: "error" }); } }); const due = Math.max(0, bill.total_amount - bill.paid_amount); return <Paper sx={{ overflow: "hidden" }}><Box sx={{ p: { xs: 2.5, md: 4 }, bgcolor: "#173F35", color: "white" }}><Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={3}><Box><Typography variant="overline" sx={{ opacity: .7 }}>CURRENT BILL</Typography><Typography variant="h4">{bill.title}</Typography><Typography sx={{ opacity: .8, mt: .5 }}>{bill.billed_user?.full_name && `${bill.billed_user.full_name} · `}{bill.bill_number} · Due {dayjs(bill.due_date).format("DD MMM YYYY")}</Typography></Box><Box sx={{ textAlign: { md: "right" } }}><Typography variant="body2" sx={{ opacity: .7 }}>Amount due</Typography><Typography variant="h3">₹{due.toLocaleString("en-IN")}</Typography></Box></Stack></Box><Box sx={{ p: { xs: 2.5, md: 4 } }}><Typography variant="h6">Charge breakdown</Typography><Stack divider={<Divider />} sx={{ my: 2 }}>{bill.line_items.map((item) => <Stack key={item.id} direction="row" justifyContent="space-between" sx={{ py: 1.5 }}><Stack direction="row" spacing={1.5} alignItems="center">{item.code === "water" ? <WaterDropRounded color="info" /> : item.code === "electricity" ? <ElectricBoltRounded color="warning" /> : <AccountBalanceWalletRounded color="primary" />}<Typography>{item.label}</Typography></Stack><Typography fontWeight={850}>₹{item.amount.toLocaleString("en-IN")}</Typography></Stack>)}</Stack><Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ sm: "center" }} spacing={2}><Download bill={bill} />{bill.status !== "paid" && canPay && <Button size="large" variant="contained" startIcon={<PaymentsRounded />} disabled={!paymentEnabled || pay.isPending} onClick={() => pay.mutate()}>{paymentEnabled ? "Pay securely with UPI" : "UPI payment unavailable"}</Button>}</Stack>{!paymentEnabled && bill.status !== "paid" && <Alert severity="info" sx={{ mt: 2 }}>Online payment will activate after the society configures its Razorpay merchant account. Your bill has not been marked paid.</Alert>}</Box></Paper>; }
+
+function CreateBillDialog({ open, onClose, users, onCreated }: { open: boolean; onClose: () => void; users: User[]; onCreated: () => Promise<void> }) { const now = dayjs(); const [form, setForm] = useState({ billed_user_id: "", billing_year: now.year(), billing_month: now.month() + 1, maintenance_amount: 1800, water_amount: 0, electricity_amount: 0, due_date: now.add(15, "day").format("YYYY-MM-DD") }); const create = useMutation({ mutationFn: async () => (await api.post("/bills/", { ...form, billed_user_id: Number(form.billed_user_id) })).data, onSuccess: async () => { enqueueSnackbar("Monthly bill created", { variant: "success" }); await onCreated(); }, onError: (error: any) => enqueueSnackbar(error?.response?.data?.detail || "Could not create bill", { variant: "error" }) }); return <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm"><DialogTitle>Create monthly bill</DialogTitle><DialogContent><Stack spacing={2} sx={{ mt: 1 }}><TextField select label="Resident account" value={form.billed_user_id} onChange={(event) => setForm({ ...form, billed_user_id: event.target.value })}>{users.map((user) => <MenuItem key={user.id} value={user.id}>{user.full_name} · {user.email}</MenuItem>)}</TextField><Stack direction={{ xs: "column", sm: "row" }} spacing={2}><TextField fullWidth type="number" label="Year" value={form.billing_year} onChange={(e) => setForm({ ...form, billing_year: Number(e.target.value) })} /><TextField fullWidth select label="Month" value={form.billing_month} onChange={(e) => setForm({ ...form, billing_month: Number(e.target.value) })}>{Array.from({ length: 12 }, (_, index) => <MenuItem key={index + 1} value={index + 1}>{dayjs().month(index).format("MMMM")}</MenuItem>)}</TextField></Stack><TextField type="number" label="Normal maintenance" value={form.maintenance_amount} onChange={(e) => setForm({ ...form, maintenance_amount: Number(e.target.value) })} /><TextField type="number" label="Water" value={form.water_amount} onChange={(e) => setForm({ ...form, water_amount: Number(e.target.value) })} /><TextField type="number" label="Electricity" value={form.electricity_amount} onChange={(e) => setForm({ ...form, electricity_amount: Number(e.target.value) })} /><TextField type="date" label="Due date" InputLabelProps={{ shrink: true }} value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /><Alert severity="info">Total: ₹{(form.maintenance_amount + form.water_amount + form.electricity_amount).toLocaleString("en-IN")}</Alert></Stack></DialogContent><DialogActions sx={{ p: 3 }}><Button onClick={onClose}>Cancel</Button><Button variant="contained" disabled={!form.billed_user_id || create.isPending} onClick={() => create.mutate()}>Create bill</Button></DialogActions></Dialog>; }
+
+function Download({ bill }: { bill: Bill }) { return <Button variant="outlined" color="inherit" startIcon={<DownloadRounded />} onClick={async () => { const response = await api.get(`/bills/${bill.id}/pdf`, { responseType: "blob" }); const url = URL.createObjectURL(response.data); const link = document.createElement("a"); link.href = url; link.download = `${bill.bill_number}.pdf`; link.click(); URL.revokeObjectURL(url); }}>Invoice</Button>; }
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) { return <Paper sx={{ p: 2.5 }}><Stack direction="row" spacing={1.5} alignItems="center"><Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: "action.hover", color: "primary.main", display: "grid", placeItems: "center" }}>{icon}</Box><Box><Typography variant="caption" color="text.secondary">{label}</Typography><Typography variant="h5">{value}</Typography></Box></Stack></Paper>; }
+async function loadRazorpay() { if ((window as any).Razorpay) return; await new Promise<void>((resolve, reject) => { const script = document.createElement("script"); script.src = "https://checkout.razorpay.com/v1/checkout.js"; script.onload = () => resolve(); script.onerror = () => reject(new Error("Razorpay checkout could not load")); document.body.appendChild(script); }); }

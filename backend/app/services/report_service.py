@@ -44,14 +44,13 @@ def generate_bill_pdf(bill: Bill, flat_display: str, resident_display: str) -> b
     if bill.description:
         story.append(Paragraph(bill.description, styles["Normal"]))
 
-    rows = [
-        ["Description", "Amount"],
-        ["Base maintenance", f"₹ {bill.amount:,.2f}"],
-        ["Late fee", f"₹ {bill.late_fee:,.2f}"],
-        ["Total", f"₹ {bill.total_amount:,.2f}"],
-        ["Paid", f"₹ {bill.paid_amount:,.2f}"],
-        ["Outstanding", f"₹ {bill.outstanding:,.2f}"],
-    ]
+    rows = [["Description", "Amount"]]
+    rows.extend([[item.label, f"INR {item.amount:,.2f}"] for item in bill.line_items])
+    if bill.late_fee:
+        rows.append(["Late fee", f"INR {bill.late_fee:,.2f}"])
+    rows.extend([["Total", f"INR {bill.total_amount:,.2f}"],
+                 ["Paid", f"INR {bill.paid_amount:,.2f}"],
+                 ["Outstanding", f"INR {bill.outstanding:,.2f}"]])
     t = Table(rows, colWidths=[110 * mm, 50 * mm])
     t.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F62FE")),

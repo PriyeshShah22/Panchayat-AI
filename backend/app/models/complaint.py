@@ -12,11 +12,11 @@ from app.db.base import Base
 
 
 class ComplaintStatus(str, enum.Enum):
-    open = "open"
+    submitted = "submitted"
     in_progress = "in_progress"
+    rejected = "rejected"
     resolved = "resolved"
-    closed = "closed"
-    escalated = "escalated"
+    withdrawn = "withdrawn"
 
 
 class ComplaintPriority(str, enum.Enum):
@@ -50,7 +50,7 @@ class Complaint(Base):
     assignee_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     category_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("complaint_categories.id", ondelete="SET NULL"), nullable=True)
-    status: Mapped[ComplaintStatus] = mapped_column(Enum(ComplaintStatus), default=ComplaintStatus.open, nullable=False, index=True)
+    status: Mapped[ComplaintStatus] = mapped_column(Enum(ComplaintStatus), default=ComplaintStatus.submitted, nullable=False, index=True)
     priority: Mapped[ComplaintPriority] = mapped_column(Enum(ComplaintPriority), default=ComplaintPriority.medium, nullable=False, index=True)
 
     photo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
@@ -68,6 +68,10 @@ class Complaint(Base):
     comments: Mapped[List["ComplaintComment"]] = relationship(
         "ComplaintComment", back_populates="complaint", cascade="all, delete-orphan"
     )
+    events: Mapped[List["ComplaintEvent"]] = relationship(
+        "ComplaintEvent", back_populates="complaint", cascade="all, delete-orphan",
+        order_by="ComplaintEvent.created_at",
+    )
 
 
 class ComplaintComment(Base):
@@ -82,6 +86,21 @@ class ComplaintComment(Base):
 
     complaint: Mapped[Complaint] = relationship(Complaint, back_populates="comments")
     author: Mapped["User"] = relationship("User")
+
+
+class ComplaintEvent(Base):
+    __tablename__ = "complaint_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    complaint_id: Mapped[int] = mapped_column(Integer, ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    from_status: Mapped[Optional[str]] = mapped_column(String(30))
+    to_status: Mapped[str] = mapped_column(String(30), nullable=False)
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    complaint: Mapped[Complaint] = relationship(Complaint, back_populates="events")
+    actor: Mapped["User"] = relationship("User")
 
 
 from app.models.user import User  # noqa: E402
