@@ -60,7 +60,7 @@ def main() -> None:
     create_all()
     db = SessionLocal()
     try:
-        print("Seeding…")
+        print("Seeding...")
         # Permissions
         admin_perms = [
             ("users.manage", "Manage users"),
@@ -122,11 +122,17 @@ def main() -> None:
         security = upsert_role(db, "security", "Security staff")
 
         for code, name in admin_perms:
-            admin.permissions.append(upsert_permission(db, code, name))
+            permission = upsert_permission(db, code, name)
+            if permission not in admin.permissions:
+                admin.permissions.append(permission)
         for code, name in committee_perms:
-            committee.permissions.append(upsert_permission(db, code, name))
+            permission = upsert_permission(db, code, name)
+            if permission not in committee.permissions:
+                committee.permissions.append(permission)
         for code, name in security_perms:
-            security.permissions.append(upsert_permission(db, code, name))
+            permission = upsert_permission(db, code, name)
+            if permission not in security.permissions:
+                security.permissions.append(permission)
         db.flush()
 
         # Users
@@ -208,7 +214,8 @@ def main() -> None:
             generate_monthly_bills(db, soc.id)
 
         db.commit()
-        print("✔ Seed complete")
+        # Keep console output compatible with the default Windows code page.
+        print("[OK] Seed complete")
         print("\nLogin credentials (all in society: Green Park Residency):")
         print("  admin@greenpark.com     / Admin@12345     (superuser + admin)")
         print("  committee@greenpark.com / Committee@123   (committee)")
