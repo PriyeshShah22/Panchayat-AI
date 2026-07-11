@@ -1,0 +1,159 @@
+# ==========================================================
+# SMART SOCIETY MANAGEMENT SYSTEM
+# ==========================================================
+
+############################
+# Python / FastAPI
+############################
+
+backend/.venv/
+backend/venv/
+backend/env/
+
+backend/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/**/*.pyd
+
+*.py[cod]
+*$py.class
+
+############################
+# Database
+############################
+
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+############################
+# Environment Variables
+############################
+
+backend/.env
+backend/.env.local
+backend/.env.production
+
+frontend-web/.env
+frontend-web/.env.local
+
+mobile/.env
+
+############################
+# Uploads
+############################
+
+backend/uploads/
+
+############################
+# Logs
+############################
+
+*.log
+logs/
+*.out
+
+############################
+# React / Vite
+############################
+
+frontend-web/node_modules/
+frontend-web/dist/
+frontend-web/.vite/
+
+############################
+# Flutter
+############################
+
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/.metadata
+
+mobile/build/
+
+mobile/android/.gradle/
+mobile/android/app/debug/
+mobile/android/app/profile/
+mobile/android/app/release/
+
+mobile/ios/Pods/
+mobile/ios/Flutter/
+
+############################
+# VS Code
+############################
+
+.vscode/
+
+############################
+# IntelliJ / Android Studio
+############################
+
+.idea/
+*.iml
+
+############################
+# Windows
+############################
+
+Thumbs.db
+Desktop.ini
+
+############################
+# macOS
+############################
+
+.DS_Store
+
+############################
+# Git
+############################
+
+*.orig
+
+############################
+# Coverage
+############################
+
+.coverage
+coverage/
+htmlcov/
+
+############################
+# Cache
+############################
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+############################
+# Temporary
+############################
+
+tmp/
+temp/
+
+############################
+# Build files
+############################
+
+dist/
+build/
+
+############################
+# Secrets
+############################
+
+*.pem
+*.key
+*.crt
+
+############################
+# Keep these
+############################
+
+!backend/.env.example
+!frontend-web/.env.example
