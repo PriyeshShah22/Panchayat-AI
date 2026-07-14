@@ -273,8 +273,68 @@ export const words: Record<string, Record<AppLanguage, string>> = {
 };
 
 Object.assign(words, offlineWords);
+const caseInsensitiveWords = new Map(
+  Object.keys(words).map((key) => [key.toLocaleLowerCase("en-IN"), key]),
+);
+
+const societyPhrases: Array<[string, string, string]> = [
+  ["bedroom roof se pani leakage", "बेडरूम की छत से पानी का रिसाव", "बेडरूमच्या छतामधून पाण्याची गळती"],
+  ["bedroom ke roof se pani ka leak ho raha hai", "बेडरूम की छत से पानी रिस रहा है", "बेडरूमच्या छतामधून पाणी गळत आहे"],
+  ["problem aaj (today) se start hui hai", "समस्या आज से शुरू हुई है", "समस्या आजपासून सुरू झाली आहे"],
+  ["kripya urgent inspection aur repair karwaya jaye taaki property ko nuksan na ho", "कृपया तुरंत जाँच और मरम्मत कराएं ताकि संपत्ति को नुकसान न हो", "मालमत्तेचे नुकसान टाळण्यासाठी कृपया तातडीने तपासणी आणि दुरुस्ती करा"],
+  ["request for repair of road potholes due to safety hazard and injury", "सुरक्षा खतरे और चोट के कारण सड़क के गड्ढों की मरम्मत का अनुरोध", "सुरक्षेचा धोका आणि दुखापत झाल्यामुळे रस्त्यावरील खड्डे दुरुस्त करण्याची विनंती"],
+  ["many potholes are present on the road in", "सड़क पर कई गड्ढे हैं, स्थान", "रस्त्यावर अनेक खड्डे आहेत, ठिकाण"],
+  ["this condition has been ongoing for the last two years", "यह स्थिति पिछले दो वर्षों से बनी हुई है", "ही परिस्थिती मागील दोन वर्षांपासून सुरू आहे"],
+  ["the potholes have caused a safety hazard and i personally fell off my bike due to the potholes", "गड्ढों से सुरक्षा का खतरा पैदा हुआ है और मैं स्वयं बाइक से गिर गया", "खड्ड्यांमुळे सुरक्षेचा धोका निर्माण झाला असून मी स्वतः दुचाकीवरून पडलो"],
+  ["request the society to inspect the road and carry out urgent patch repair/repair of the affected area to prevent further accidents", "आगे की दुर्घटनाएँ रोकने के लिए सोसायटी से सड़क का निरीक्षण और प्रभावित हिस्से की तत्काल मरम्मत का अनुरोध है", "पुढील अपघात टाळण्यासाठी सोसायटीने रस्त्याची तपासणी करून बाधित भागाची तातडीने दुरुस्ती करावी"],
+  ["water leakage", "पानी का रिसाव", "पाण्याची गळती"],
+  ["water supply", "पानी की आपूर्ति", "पाणीपुरवठा"],
+  ["not working", "काम नहीं कर रहा", "काम करत नाही"],
+  ["since morning", "सुबह से", "सकाळपासून"],
+  ["urgent repair", "तत्काल मरम्मत", "तातडीची दुरुस्ती"],
+  ["road potholes", "सड़क के गड्ढे", "रस्त्यावरील खड्डे"],
+  ["safety hazard", "सुरक्षा का खतरा", "सुरक्षेचा धोका"],
+  ["garbage not collected", "कचरा नहीं उठाया गया", "कचरा उचललेला नाही"],
+  ["street light", "सड़क की बत्ती", "रस्त्यावरील दिवा"],
+  ["parking issue", "पार्किंग की समस्या", "पार्किंगची समस्या"],
+  ["noise complaint", "शोर की शिकायत", "आवाजाची तक्रार"],
+];
+
+const societyContentMarker = /\b(leak|leakage|pani|water|pipe|sink|roof|lift|pothole|road|repair|garbage|waste|light|electric|parking|noise|security|safety|injury|complaint|problem)\b/i;
+
+export function translateSocietyText(text: string, language: AppLanguage) {
+  if (language === "en" || !text.trim()) return text;
+  const exact = words[text]?.[language];
+  if (exact) return exact;
+  const caseInsensitiveKey = caseInsensitiveWords.get(text.toLocaleLowerCase("en-IN"));
+  if (caseInsensitiveKey) return words[caseInsensitiveKey][language];
+
+  const activeCount = text.match(/^Active \((\d+)\)$/i);
+  if (activeCount)
+    return language === "hi" ? `सक्रिय (${activeCount[1]})` : `सक्रिय (${activeCount[1]})`;
+  const complaintNumber = text.match(/^Complaint #(\d+)$/i);
+  if (complaintNumber)
+    return language === "hi" ? `शिकायत #${complaintNumber[1]}` : `तक्रार #${complaintNumber[1]}`;
+
+  let translated = text;
+  const interfaceParts = language === "hi"
+    ? [["Flat", "फ्लैट"], ["Floor", "मंजिल"], ["Reported", "दर्ज"]]
+    : [["Flat", "फ्लॅट"], ["Floor", "मजला"], ["Reported", "नोंद"]];
+  for (const [english, localized] of interfaceParts)
+    translated = translated.replace(new RegExp(`\\b${english}\\b`, "gi"), localized);
+
+  if (!societyContentMarker.test(text)) return translated;
+  for (const [english, hindi, marathi] of societyPhrases) {
+    const escaped = english.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    translated = translated.replace(
+      new RegExp(escaped, "gi"),
+      language === "hi" ? hindi : marathi,
+    );
+  }
+  return translated;
+}
 
 export function useI18n() {
   const language = useLanguageStore((state) => state.language);
-  return { language, t: (text: string) => words[text]?.[language] ?? text };
+  return { language, t: (text: string) => translateSocietyText(text, language) };
 }

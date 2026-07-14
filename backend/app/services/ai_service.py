@@ -380,7 +380,16 @@ def chat(db: Session, user: User, message: str, language: str = "en-IN",
     return result
 
 
-def confirm_action(db: Session, user: User, action_id: int) -> Dict[str, Any]:
+def _action_message(language: str, english: str, hindi: str, marathi: str) -> str:
+    code = (language or "en-IN").lower()
+    if code.startswith("mr"):
+        return marathi
+    if code.startswith("hi"):
+        return hindi
+    return english
+
+
+def confirm_action(db: Session, user: User, action_id: int, language: str = "en-IN") -> Dict[str, Any]:
     action = db.get(AIAction, action_id)
     if not action: raise LookupError("Action not found")
     if action.requester_id != user.id: raise PermissionError("This action belongs to another user")
@@ -394,19 +403,34 @@ def confirm_action(db: Session, user: User, action_id: int) -> Dict[str, Any]:
         if action.action_type == "create_complaint":
             complaint = create_complaint(db, user, ComplaintCreate(**payload), source="assistant")
             entity_type, entity_id = "complaint", complaint.id
-            message = f"Complaint #{complaint.id} was submitted."
+            message = _action_message(
+                language,
+                f"Complaint #{complaint.id} was submitted.",
+                f"शिकायत #{complaint.id} जमा हो गई है।",
+                f"तक्रार #{complaint.id} नोंदवली आहे.",
+            )
         elif action.action_type == "pay_outstanding_dues":
             bills = db.execute(select(Bill).where(Bill.id.in_(payload["bill_ids"]), Bill.billed_user_id == user.id)).scalars().all()
             outstanding = round(sum(bill.outstanding for bill in bills), 2)
             if outstanding <= 0: raise ValueError("These dues are already paid")
             entity_type, entity_id = "dues_checkout", user.id
-            message = f"Your combined checkout for ₹{outstanding:,.2f} is ready below."
+            message = _action_message(
+                language,
+                f"Your combined checkout for ₹{outstanding:,.2f} is ready below.",
+                f"₹{outstanding:,.2f} के संयुक्त भुगतान का विकल्प नीचे तैयार है।",
+                f"₹{outstanding:,.2f} च्या एकत्रित भरण्याचा पर्याय खाली तयार आहे.",
+            )
         elif action.action_type == "publish_announcement":
             if not (user.is_superuser or "admin" in user.role_names): raise PermissionError("Only an administrator can publish announcements")
             notice = Notice(society_id=user.society_id, author_id=user.id, title=payload["title"], body=payload["body"], audience=payload["audience"], is_pinned=payload["is_pinned"])
             db.add(notice); db.flush()
             entity_type, entity_id = "notice", notice.id
-            message = f"Announcement '{notice.title}' was published."
+            message = _action_message(
+                language,
+                f"Announcement '{notice.title}' was published.",
+                f"घोषणा '{notice.title}' प्रकाशित हो गई है।",
+                f"घोषणा '{notice.title}' प्रकाशित केली आहे.",
+            )
         else: raise ValueError("Unsupported action type")
         action = db.get(AIAction, action_id)
         action.status = AIActionStatus.completed; action.result_entity_type = entity_type; action.result_entity_id = entity_id
@@ -419,7 +443,7 @@ def confirm_action(db: Session, user: User, action_id: int) -> Dict[str, Any]:
         raise
 
 
-def cancel_action(db: Session, user: User, action_id: int) -> Dict[str, Any]:
+def cancel_action(db: Session, user: User, action_id: int, language: str = "en-IN") -> Dict[str, Any]:
     action = db.get(AIAction, action_id)
     if not action: raise LookupError("Action not found")
     if action.requester_id != user.id: raise PermissionError("This action belongs to another user")
@@ -427,4 +451,13 @@ def cancel_action(db: Session, user: User, action_id: int) -> Dict[str, Any]:
     action.status = AIActionStatus.cancelled
     db.add(AuditLog(actor_id=user.id, action="ai_action_cancelled", entity_type="ai_action", entity_id=action.id))
     db.commit()
-    return {"action_id": action.id, "status": "cancelled", "message": "The action was cancelled."}
+    return {
+        "action_id": action.id,
+        "status": "cancelled",
+        "message": _action_message(
+            language,
+            "The action was cancelled.",
+            "कार्य रद्द कर दिया गया है।",
+            "कार्य रद्द केले आहे.",
+        ),
+    }

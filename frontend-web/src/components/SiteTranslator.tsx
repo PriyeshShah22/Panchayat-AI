@@ -1,5 +1,5 @@
 import { useLayoutEffect } from "react";
-import { useLanguageStore, words } from "../store/language";
+import { translateSocietyText, useLanguageStore, words } from "../store/language";
 
 const originals = new WeakMap<Node, string>();
 const translatedValues = new Set(
@@ -46,7 +46,7 @@ function translateText(original: string, language: "en" | "hi" | "mr") {
     return language === "hi"
       ? `${notices[1]} सक्रिय सूचनाएं उपलब्ध हैं। महत्वपूर्ण सूचना हमेशा ऊपर दिखाई जाती है।`
       : `${notices[1]} सक्रिय सूचना उपलब्ध आहेत. महत्त्वाची सूचना नेहमी वर दिसते.`;
-  return result;
+  return translateSocietyText(result, language);
 }
 
 function applyTranslations(language: "en" | "hi" | "mr") {
@@ -69,7 +69,13 @@ function applyTranslations(language: "en" | "hi" | "mr") {
     } else {
       const stored = originals.get(node) ?? trimmed;
       const expected = translateText(stored, language);
-      if (trimmed !== expected && !translatedValues.has(trimmed)) originals.set(node, reverse.get(trimmed) ?? trimmed);
+      const looksLocalized = /[\u0900-\u097f]/.test(trimmed);
+      if (
+        trimmed !== expected &&
+        !translatedValues.has(trimmed) &&
+        !looksLocalized
+      )
+        originals.set(node, reverse.get(trimmed) ?? trimmed);
     }
     const original = originals.get(node) ?? reverse.get(trimmed) ?? trimmed;
     const replacement = translateText(original, language);

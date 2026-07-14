@@ -59,9 +59,9 @@ async def voice(
 
 
 @router.post("/actions/{action_id}/confirm", response_model=ActionResult)
-def confirm(action_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+def confirm(action_id: int, language: str = "en-IN", db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     try:
-        return ActionResult(**confirm_action(db, current, action_id))
+        return ActionResult(**confirm_action(db, current, action_id, language))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:
@@ -73,9 +73,9 @@ def confirm(action_id: int, db: Session = Depends(get_db), current: User = Depen
 
 
 @router.post("/actions/{action_id}/cancel", response_model=ActionResult)
-def cancel(action_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
+def cancel(action_id: int, language: str = "en-IN", db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     try:
-        return ActionResult(**cancel_action(db, current, action_id))
+        return ActionResult(**cancel_action(db, current, action_id, language))
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except PermissionError as exc:

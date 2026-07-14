@@ -5,9 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { Bill, Complaint, Notice, Visitor } from "../types/api";
 import { useLocalizedTexts } from "../components/LocalizedText";
+import { useI18n } from "../store/language";
+import { playLocalizedSpeech } from "../utils/speech";
+import { enqueueSnackbar } from "notistack";
 
 export default function Dashboard() {
   const go = useNavigate();
+  const { language } = useI18n();
   const complaints = useQuery({ queryKey: ["complaints", "home"], queryFn: async () => (await api.get<Complaint[]>("/complaints/?limit=20")).data });
   const bills = useQuery({ queryKey: ["bills", "home"], queryFn: async () => (await api.get<Bill[]>("/bills/?limit=20")).data });
   const notices = useQuery({ queryKey: ["notices", "home"], queryFn: async () => (await api.get<Notice[]>("/notices/")).data });
@@ -19,9 +23,10 @@ export default function Dashboard() {
   const latest = notices.data?.[0];
   const [latestTitle, latestBody] = useLocalizedTexts([latest?.title ?? "", latest?.body ?? ""]);
   const readNotice = () => {
-    if (!latest || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(`${latest.title}. ${latest.body}`));
+    if (!latest) return;
+    void playLocalizedSpeech(`${latestTitle}. ${latestBody}`, language).catch(() =>
+      enqueueSnackbar("Read aloud is temporarily unavailable.", { variant: "error" }),
+    );
   };
   return <Stack spacing={3}>
     <Box><Typography variant="overline" color="primary" fontWeight={900} letterSpacing={2}>COMMUNITY DESK</Typography><Typography variant="h2" sx={{ fontSize: { xs: "2.6rem", md: "4.5rem" }, maxWidth: 760 }}>Say it. We’ll help get it done.</Typography></Box>

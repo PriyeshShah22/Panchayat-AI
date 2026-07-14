@@ -26,6 +26,7 @@ import {
 import { enqueueSnackbar } from "notistack";
 import { api } from "../api/client";
 import { useI18n } from "../store/language";
+import { playLocalizedSpeech, stopLocalizedSpeech } from "../utils/speech";
 
 interface Proposal {
   id: number;
@@ -99,7 +100,7 @@ export default function AI() {
     () => () => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       if (timerRef.current) clearInterval(timerRef.current);
-      window.speechSynthesis?.cancel();
+      stopLocalizedSpeech();
       if (animationRef.current) cancelAnimationFrame(animationRef.current);
       void audioContextRef.current?.close();
     },
@@ -107,19 +108,35 @@ export default function AI() {
   );
 
   function stopSpeaking() {
-    window.speechSynthesis?.cancel();
+    stopLocalizedSpeech();
     setSpeakingText(null);
   }
-  function speak(text: string, language = "en-IN") {
-    if (!("speechSynthesis" in window))
-      return setVoiceError("Read aloud is unavailable in this browser.");
+  async function speak(text: string, language = "en-IN") {
     stopSpeaking();
-    const utterance = new SpeechSynthesisUtterance(plainSpeech(text));
-    utterance.lang = language;
-    utterance.onstart = () => setSpeakingText(text);
-    utterance.onend = () => setSpeakingText(null);
-    utterance.onerror = () => setSpeakingText(null);
-    speechSynthesis.speak(utterance);
+    const cleanText = plainSpeech(text);
+    setVoiceError(null);
+    setSpeakingText(text);
+    const speechLanguage = language.toLowerCase().startsWith("mr")
+      ? "mr"
+      : language.toLowerCase().startsWith("hi")
+        ? "hi"
+        : "en";
+    try {
+      await playLocalizedSpeech(cleanText, speechLanguage, {
+        onEnd: () => setSpeakingText(null),
+        onError: (message) => {
+          setSpeakingText(null);
+          setVoiceError(message);
+        },
+      });
+    } catch (error) {
+      setSpeakingText(null);
+      setVoiceError(
+        error instanceof Error
+          ? error.message
+          : "Read aloud is unavailable in this browser.",
+      );
+    }
   }
   function appendResult(
     data: {
@@ -145,7 +162,7 @@ export default function AI() {
         language: responseLanguage,
       },
     ]);
-    speak(reply, responseLanguage);
+    void speak(reply, responseLanguage);
   }
   async function send(text = input) {
     if (!text.trim() || busy) return;
@@ -291,17 +308,24 @@ export default function AI() {
     if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
     setRecording(false);
   }
-  async function decide(action: Proposal, decision: "confirm" | "cancel") {
+  async function decide(
+    action: Proposal,
+    decision: "confirm" | "cancel",
+    language = "en-IN",
+  ) {
     stopSpeaking();
     setBusy(true);
     try {
-      const data = (await api.post(`/ai/actions/${action.id}/${decision}`))
-        .data;
+      const data = (
+        await api.post(`/ai/actions/${action.id}/${decision}`, undefined, {
+          params: { language },
+        })
+      ).data;
       setMessages((current) => [
         ...current,
-        { role: "assistant", content: data.message },
+        { role: "assistant", content: data.message, language },
       ]);
-      speak(data.message);
+      void speak(data.message, language);
     } catch (error: any) {
       enqueueSnackbar(
         error?.response?.data?.detail || "That action could not be completed",
@@ -420,7 +444,7 @@ export default function AI() {
                     onClick={() =>
                       speakingText === message.content
                         ? stopSpeaking()
-                        : speak(message.content, message.language)
+                        : void speak(message.content, message.language)
                     }
                     aria-label="Read response aloud"
                     sx={{ mt: 0.5 }}
@@ -438,6 +462,7 @@ export default function AI() {
                   action={message.action}
                   busy={busy}
                   decide={decide}
+                  language={message.language || "en-IN"}
                   onPaid={async () =>
                     setMessages((current) => [
                       ...current,
@@ -588,11 +613,17 @@ function ActionCard({
   action,
   busy,
   decide,
+  language,
   onPaid,
 }: {
   action: Proposal;
   busy: boolean;
-  decide: (action: Proposal, decision: "confirm" | "cancel") => Promise<void>;
+  decide: (
+    action: Proposal,
+    decision: "confirm" | "cancel",
+    language?: string,
+  ) => Promise<void>;
+  language: string;
   onPaid: () => Promise<void>;
 }) {
   const payment = action.action_type === "pay_outstanding_dues";
@@ -713,7 +744,7 @@ function ActionCard({
             variant="contained"
             startIcon={<CheckCircleRounded />}
             disabled={busy}
-            onClick={() => void decide(action, "confirm")}
+            onClick={() => void decide(action, "confirm", language)}
           >
             Confirm action
           </Button>
@@ -723,7 +754,7 @@ function ActionCard({
           color="inherit"
           startIcon={<CancelOutlined />}
           disabled={busy || paying}
-          onClick={() => void decide(action, "cancel")}
+          onClick={() => void decide(action, "cancel", language)}
         >
           Cancel
         </Button>
