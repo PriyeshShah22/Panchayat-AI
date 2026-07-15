@@ -22,7 +22,7 @@ export default function Login() {
       const { data } = await api.post<LoginResponse>("/auth/login", { email, password });
       setTokens(data.access_token, data.refresh_token); setUser(data.user); navigate("/", { replace: true });
     } catch (err: any) {
-      setError(err?.response?.data?.detail || "We could not sign you in. Check the details or ask a volunteer for help.");
+      setError(err?.response?.data?.detail || "The server could not be reached. Start the app and try again.");
     } finally { setLoading(false); }
   }
 
