@@ -135,13 +135,13 @@ Building and flat are selected from real society records. An administrator sees 
 
 ## Windows quick start
 
-On Windows 10 or Windows 11, clone or download the repository and run this from the repository root:
+On Windows 10 or Windows 11, clone or download the repository. Run the one-time installer from the repository root:
 
 ```bat
-start.bat
+setup.bat
 ```
 
-The startup script:
+The setup script:
 
 1. Detects compatible system installations of Python 3.11+ and Node.js 20+.
 2. If either runtime is missing, downloads an isolated Python 3.12 runtime and the current portable Node.js LTS release from their official websites. Administrator access is not required.
@@ -149,9 +149,17 @@ The startup script:
 4. Installs all locked frontend dependencies through npm.
 5. Creates ignored local environment files from the examples when missing.
 6. Applies every Alembic migration and adds only missing development seed records.
-7. Starts the API at `http://localhost:8000` and web app at `http://localhost:5173`.
+7. Backs up and rebuilds a repository-local SQLite database if an earlier interrupted migration left it unusable.
 
-A fresh computer only needs Windows PowerShell and an internet connection for the first run. Both are normally available on supported Windows installations. Downloaded runtimes are stored in the ignored `.tools` directory and are reused on later runs. Run `start.bat --setup-only` to install and verify everything without starting the servers.
+A fresh computer only needs Windows PowerShell and an internet connection for `setup.bat`. Administrator access is not required. Downloaded runtimes are stored in the ignored `.tools` directory.
+
+After setup prints `[READY]`, launch the app with:
+
+```bat
+start.bat
+```
+
+`start.bat` is intentionally fast. It does not install packages, migrate the database, or seed data. It only starts the API at `http://localhost:8000`, starts the web app at `http://localhost:5173`, and opens the site. Run `setup.bat` again only after dependency changes or when setup/database repair is required.
 
 The application and manual workflows start without third-party credentials. Panchayat AI, Indian-language speech, live Razorpay payments, email, and Telegram require their corresponding keys to be added to `backend/.env`; secrets are intentionally never downloaded or committed automatically.
 
@@ -249,7 +257,8 @@ POST /api/v1/complaints/{id}/withdraw
 - `frontend-web/` — React web application.
 - `mobile/` — Flutter client project.
 - `docs/screenshots/` — current product screenshots used in this README.
-- `start.bat` — repeatable Windows setup and startup.
+- `setup.bat` — one-time Windows runtime, dependency, environment, and database setup.
+- `start.bat` — fast daily launcher for the configured backend and web app.
 
 ## License
 

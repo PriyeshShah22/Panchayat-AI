@@ -32,6 +32,7 @@ from app.schemas.auth import (
 from app.schemas.join_request import JoinRequestCreate, JoinRequestOut
 from app.models.join_request import JoinRequest, JoinRequestStatus
 from app.schemas.user import RoleOut, UserOut
+from app.services.location_service import is_valid_flat, is_valid_wing
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -43,12 +44,15 @@ def public_societies(db: Session = Depends(get_db)) -> list[dict]:
     societies = db.execute(select(Society).order_by(Society.name)).scalars().all()
     result = []
     for society in societies:
-        blocks = db.execute(select(Block).where(Block.society_id == society.id).order_by(Block.name)).scalars().all()
+        blocks = db.execute(select(Block).where(
+            Block.society_id == society.id,
+            Block.name.in_(["A", "B", "C", "D"]),
+        ).order_by(Block.name)).scalars().all()
         result.append({"id": society.id, "name": society.name, "buildings": [{
             "id": block.id, "name": block.name,
             "flats": [{"id": flat.id, "number": flat.number} for flat in db.execute(
                 select(Flat).where(Flat.block_id == block.id).order_by(Flat.number)
-            ).scalars().all()],
+            ).scalars().all() if is_valid_flat(flat.number)],
         } for block in blocks]})
     return result
 
@@ -92,6 +96,18 @@ def request_to_join(payload: JoinRequestCreate, db: Session = Depends(get_db)) -
     if existing_request:
         db.delete(existing_request)
         db.flush()
+    block = db.execute(select(Block).where(
+        Block.society_id == payload.society_id,
+        Block.name == payload.building_name,
+    )).scalar_one_or_none()
+    if not block or not is_valid_wing(block.name):
+        raise HTTPException(status_code=400, detail="Select a valid building in this society")
+    flat = db.execute(select(Flat).where(
+        Flat.block_id == block.id,
+        Flat.number == payload.flat_number,
+    )).scalar_one_or_none()
+    if not flat or not is_valid_flat(flat.number):
+        raise HTTPException(status_code=400, detail="Select a valid flat in that building")
     request = JoinRequest(
         full_name=payload.full_name,
         email=payload.email,

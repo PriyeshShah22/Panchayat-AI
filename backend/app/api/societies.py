@@ -9,6 +9,7 @@ from app.models.society import Block, Flat, Society
 from app.schemas.society import (
     BlockCreate, BlockOut, FlatCreate, FlatOut, SocietyCreate, SocietyOut,
 )
+from app.services.location_service import floor_for_flat, is_valid_flat, is_valid_wing
 
 router = APIRouter(prefix="/societies", tags=["societies"])
 
@@ -38,7 +39,10 @@ def list_society_flats(db: Session = Depends(get_db),
     if not current.society_id:
         return []
     rows = db.execute(
-        select(Flat).where(Flat.society_id == current.society_id).order_by(Flat.block_id, Flat.floor, Flat.number)
+        select(Flat).join(Block).where(
+            Flat.society_id == current.society_id,
+            Block.name.in_(["A", "B", "C", "D"]),
+        ).order_by(Block.name, Flat.floor, Flat.number)
     ).scalars().all()
     return [FlatOut.model_validate(flat) for flat in rows]
 
@@ -56,6 +60,10 @@ def list_blocks(society_id: int, db: Session = Depends(get_db),
 def create_block(payload: BlockCreate, db: Session = Depends(get_db),
                  current=Depends(get_current_user)) -> BlockOut:
     require_any_role(current, ["admin", "committee"])
+    if payload.society_id != current.society_id and not current.is_superuser:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if db.execute(select(Block).where(Block.society_id == payload.society_id, Block.name == payload.name)).scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="That wing already exists")
     block = Block(**payload.model_dump())
     db.add(block)
     db.commit()
@@ -79,6 +87,17 @@ def list_flats(block_id: int, db: Session = Depends(get_db),
 def create_flat(payload: FlatCreate, db: Session = Depends(get_db),
                 current=Depends(get_current_user)) -> FlatOut:
     require_any_role(current, ["admin", "committee"])
+    block = db.get(Block, payload.block_id)
+    if not block or block.society_id != payload.society_id:
+        raise HTTPException(status_code=400, detail="The selected wing is invalid")
+    if payload.society_id != current.society_id and not current.is_superuser:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    expected_floor = floor_for_flat(payload.number)
+    if payload.floor != expected_floor:
+        raise HTTPException(status_code=400, detail=f"Flat {payload.number} must be on floor {expected_floor}")
+    existing = db.execute(select(Flat).where(Flat.block_id == payload.block_id, Flat.number == payload.number)).scalar_one_or_none()
+    if existing:
+        raise HTTPException(status_code=409, detail="That flat already exists in this wing")
     flat = Flat(**payload.model_dump())
     db.add(flat)
     db.commit()

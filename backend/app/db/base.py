@@ -63,5 +63,6 @@ def create_all() -> None:
         chat as _chat,
         ai_action as _ai_action,
         join_request as _join_request,
+        notification as _notification,
     )
     Base.metadata.create_all(bind=engine)

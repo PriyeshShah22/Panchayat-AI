@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -34,6 +34,7 @@ class Society(Base):
 
 class Block(Base):
     __tablename__ = "blocks"
+    __table_args__ = (UniqueConstraint("society_id", "name", name="uq_blocks_society_wing"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     society_id: Mapped[int] = mapped_column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -46,6 +47,7 @@ class Block(Base):
 
 class Flat(Base):
     __tablename__ = "flats"
+    __table_args__ = (UniqueConstraint("block_id", "number", name="uq_flats_block_number"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     society_id: Mapped[int] = mapped_column(Integer, ForeignKey("societies.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -59,6 +61,10 @@ class Flat(Base):
     society: Mapped[Society] = relationship(Society, back_populates="flats")
     block: Mapped[Block] = relationship(Block, back_populates="flats")
     residents: Mapped[List["Resident"]] = relationship("Resident", back_populates="flat")
+
+    @property
+    def block_name(self) -> str:
+        return self.block.name
 
 
 from app.models.user import User  # noqa: E402

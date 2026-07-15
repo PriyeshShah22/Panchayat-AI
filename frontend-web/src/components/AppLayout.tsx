@@ -6,6 +6,7 @@ import { useThemeStore } from "../store/theme";
 import AdminJoinInbox from "./AdminJoinInbox";
 import { LanguageToggle } from "./LanguageToggle";
 import { useI18n } from "../store/language";
+import NotificationInbox from "./NotificationInbox";
 
 const primary = [
   { to: "/", label: "Home", icon: <DashboardRounded /> },
@@ -26,14 +27,14 @@ export default function AppLayout() {
   const { user, logout } = useAuthStore(); const { mode, toggle } = useThemeStore();
   const { t } = useI18n();
   const roles = user?.roles?.map((r) => r.name) ?? [];
-  const privileged = Boolean(user?.is_superuser || roles.some((r) => ["admin", "committee", "security"].includes(r)));
-  const items = privileged ? [...primary, ...staff] : [...primary, staff[0]];
+  const canManageSociety = Boolean(user?.is_superuser || roles.some((r) => ["admin", "committee"].includes(r)));
+  const items = canManageSociety ? [...primary, ...staff] : [...primary, staff[0]];
   const active = (to: string) => to === "/" ? pathname === "/" : pathname.startsWith(to);
   return <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: { xs: 10, md: 0 } }}><CssBaseline />
     <Box component="header" sx={{ height: 80, px: { xs: 2, md: 4 }, display: "flex", alignItems: "center", borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.default", position: "sticky", top: 0, zIndex: 1200 }}>
       <Stack direction="row" alignItems="center" spacing={1.5} onClick={() => navigate("/")} sx={{ cursor: "pointer" }}><Box sx={{ width: 44, height: 44, borderRadius: "50% 50% 46% 54%", bgcolor: "#173F35", color: "#F8F5EA", display: "grid", placeItems: "center", fontWeight: 900, fontSize: 19 }}>पं</Box><Box><Typography fontSize={18} fontWeight={850} lineHeight={1}>Panchayat</Typography><Typography variant="caption" color="text.secondary" letterSpacing={1.2}>AI SEVA</Typography></Box></Stack>
       {!mobile && <Stack direction="row" spacing={.5} sx={{ ml: 7, flex: 1 }}>{primary.map((item) => <Button key={item.to} onClick={() => navigate(item.to)} startIcon={item.icon} color="inherit" sx={{ px: 1.5, bgcolor: active(item.to) ? "#E8E2D1" : "transparent", color: active(item.to) ? "#173F35" : "text.secondary" }}>{t(item.label)}</Button>)}</Stack>}
-      <Stack direction="row" alignItems="center" spacing={1}><LanguageToggle /><Chip icon={<Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "success.main" }} />} label={t("Connected")} variant="outlined" size="small" sx={{ display: { xs: "none", xl: "flex" } }} />{(user?.is_superuser || roles.includes("admin")) && <AdminJoinInbox />}<Tooltip title="Change theme"><IconButton onClick={toggle}>{mode === "dark" ? <LightModeRounded /> : <DarkModeRounded />}</IconButton></Tooltip><Avatar sx={{ width: 38, height: 38, bgcolor: "#D76049", fontWeight: 800 }}>{user?.full_name?.[0] ?? "U"}</Avatar><Box sx={{ display: { xs: "none", lg: "block" } }}><Typography variant="body2" fontWeight={800}>{user?.full_name}</Typography><Typography variant="caption" color="text.secondary">{roles[0] ?? "resident"}</Typography></Box><Tooltip title={t("Sign out")}><IconButton onClick={() => { logout(); navigate("/login"); }}><LogoutRounded /></IconButton></Tooltip></Stack>
+      <Stack direction="row" alignItems="center" spacing={1}><LanguageToggle /><Chip icon={<Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "success.main" }} />} label={t("Connected")} variant="outlined" size="small" sx={{ display: { xs: "none", xl: "flex" } }} /><NotificationInbox />{(user?.is_superuser || roles.includes("admin")) && <AdminJoinInbox />}<Tooltip title="Change theme"><IconButton onClick={toggle}>{mode === "dark" ? <LightModeRounded /> : <DarkModeRounded />}</IconButton></Tooltip><Avatar sx={{ width: 38, height: 38, bgcolor: "#D76049", fontWeight: 800 }}>{user?.full_name?.[0] ?? "U"}</Avatar><Box sx={{ display: { xs: "none", lg: "block" } }}><Typography variant="body2" fontWeight={800}>{user?.full_name}</Typography><Typography variant="caption" color="text.secondary">{roles[0] ?? "resident"}</Typography></Box><Tooltip title={t("Sign out")}><IconButton onClick={() => { logout(); navigate("/login"); }}><LogoutRounded /></IconButton></Tooltip></Stack>
     </Box>
     <Box sx={{ display: "flex" }}>
       {!mobile && <Box component="aside" sx={{ width: 112, flexShrink: 0, minHeight: "calc(100vh - 80px)", borderRight: "1px solid", borderColor: "divider", py: 3, px: 1.5 }}><Stack spacing={1}>{items.filter((i) => !primary.some((p) => p.to === i.to)).map((item) => <Button key={item.to} onClick={() => navigate(item.to)} color="inherit" sx={{ minHeight: 76, borderRadius: 2, flexDirection: "column", gap: .5, fontSize: 11, bgcolor: active(item.to) ? "#173F35" : "transparent", color: active(item.to) ? "#fff" : "text.secondary", "& .MuiButton-startIcon": { m: 0 } }} startIcon={item.icon}>{t(item.label)}</Button>)}</Stack></Box>}

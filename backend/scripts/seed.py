@@ -91,29 +91,27 @@ def main() -> None:
             db.flush()
         print("  society:", soc.name)
 
-        # Blocks + flats
-        block_a = db.query(Block).filter_by(society_id=soc.id, name="A").one_or_none()
-        if not block_a:
-            block_a = Block(society_id=soc.id, name="A", floors=5)
-            db.add(block_a)
-            db.flush()
-        block_b = db.query(Block).filter_by(society_id=soc.id, name="B").one_or_none()
-        if not block_b:
-            block_b = Block(society_id=soc.id, name="B", floors=5)
-            db.add(block_b)
-            db.flush()
-
-        flats = []
-        for blk in (block_a, block_b):
-            for n in range(1, 6):
-                f = db.query(Flat).filter_by(society_id=soc.id, block_id=blk.id, number=f"{n:02d}").one_or_none()
-                if not f:
-                    f = Flat(society_id=soc.id, block_id=blk.id, number=f"{n:02d}",
-                             floor=n, area_sqft=950 + n * 50, bedrooms=2, bathrooms=2)
-                    db.add(f)
-                    db.flush()
-                flats.append(f)
-        print(f"  flats: {len(flats)}")
+        # Four wings, four floors, four flats on every floor.
+        flats_by_key = {}
+        for wing in ("A", "B", "C", "D"):
+            block = db.query(Block).filter_by(society_id=soc.id, name=wing).one_or_none()
+            if not block:
+                block = Block(society_id=soc.id, name=wing, floors=4)
+                db.add(block)
+                db.flush()
+            else:
+                block.floors = 4
+            for floor in range(1, 5):
+                for unit in range(1, 5):
+                    number = f"{floor}0{unit}"
+                    flat = db.query(Flat).filter_by(block_id=block.id, number=number).one_or_none()
+                    if not flat:
+                        flat = Flat(society_id=soc.id, block_id=block.id, number=number,
+                                    floor=floor, area_sqft=1000, bedrooms=2, bathrooms=2)
+                        db.add(flat)
+                        db.flush()
+                    flats_by_key[(wing, number)] = flat
+        print(f"  flats: {len(flats_by_key)}")
 
         # Roles + Permissions
         admin = upsert_role(db, "admin", "Society administrator")
@@ -154,7 +152,7 @@ def main() -> None:
                            roles=["resident"], phone="+91-9000000001")
 
         # Resident profiles
-        for user_obj, flat in [(resident_admin, flats[0]), (ravi, flats[5])]:
+        for user_obj, flat in [(resident_admin, flats_by_key[("A", "101")]), (ravi, flats_by_key[("B", "101")])]:
             existing = db.query(Resident).filter_by(user_id=user_obj.id).one_or_none()
             if not existing:
                 db.add(Resident(user_id=user_obj.id, flat_id=flat.id, ownership="owner",
@@ -175,7 +173,7 @@ def main() -> None:
             db.add(Complaint(
                 title="Leakage in kitchen sink",
                 description="The kitchen sink pipe is leaking continuously.",
-                society_id=soc.id, flat_id=flats[0].id,
+                society_id=soc.id, flat_id=flats_by_key[("A", "101")].id,
                 reporter_id=resident_admin.id, category_id=plumbing.id,
                 status=ComplaintStatus.in_progress,
                 priority=ComplaintPriority.high,
@@ -183,7 +181,7 @@ def main() -> None:
             db.add(Complaint(
                 title="Lift not working in Block B",
                 description="Lift has been stuck on 3rd floor since morning.",
-                society_id=soc.id, flat_id=flats[6].id,
+                society_id=soc.id, flat_id=flats_by_key[("B", "201")].id,
                 reporter_id=ravi.id,
                 status=ComplaintStatus.submitted,
                 priority=ComplaintPriority.urgent,
@@ -201,10 +199,10 @@ def main() -> None:
 
         # Visitors
         if not db.query(Visitor).first():
-            db.add(Visitor(society_id=soc.id, flat_id=flats[0].id, host_id=resident_admin.id,
+            db.add(Visitor(society_id=soc.id, flat_id=flats_by_key[("A", "101")].id, host_id=resident_admin.id,
                            name="Delivery — Amazon", phone="+91-8000000001",
                            purpose="Parcel delivery", status=VisitorStatus.checked_in))
-            db.add(Visitor(society_id=soc.id, flat_id=flats[5].id, host_id=ravi.id,
+            db.add(Visitor(society_id=soc.id, flat_id=flats_by_key[("B", "101")].id, host_id=ravi.id,
                            name="Friend — Ajay", phone="+91-8000000002",
                            purpose="Personal visit", vehicle_number="MH12AB1234",
                            status=VisitorStatus.approved))

@@ -84,6 +84,9 @@ export interface Visitor {
   qr_code?: string | null;
   expected_at?: string | null;
   created_at: string;
+  flat_number?: string | null;
+  wing_name?: string | null;
+  host_name?: string | null;
 }
 
 export interface Notice {
@@ -117,6 +120,7 @@ export interface Flat {
   area_sqft?: number | null;
   bedrooms: number;
   bathrooms: number;
+  block_name: string;
 }
 
 export interface AdminStats {

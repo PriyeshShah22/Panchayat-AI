@@ -7,10 +7,45 @@ from email.message import EmailMessage
 from typing import Optional
 
 import httpx
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.notification import UserNotification
+from app.models.user import Role, User, UserStatus
 
 logger = logging.getLogger(__name__)
+
+
+def notify_roles(
+    db: Session,
+    *,
+    society_id: int,
+    roles: set[str],
+    kind: str,
+    title: str,
+    message: str,
+    entity_type: str | None = None,
+    entity_id: int | None = None,
+) -> int:
+    """Queue an in-app notification for each matching active society user."""
+    users = db.execute(
+        select(User)
+        .join(User.roles)
+        .where(User.society_id == society_id, User.status == UserStatus.active, Role.name.in_(roles))
+        .distinct()
+    ).scalars().all()
+    for user in users:
+        db.add(UserNotification(
+            society_id=society_id,
+            user_id=user.id,
+            kind=kind,
+            title=title,
+            message=message,
+            entity_type=entity_type,
+            entity_id=entity_id,
+        ))
+    return len(users)
 
 
 def send_email(to: str, subject: str, html: str, text: Optional[str] = None) -> bool:

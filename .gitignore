@@ -25,6 +25,7 @@ backend/**/*.pyd
 backend/*.db
 backend/*.sqlite
 backend/*.sqlite3
+backend/.database-backups/
 
 ############################
 # Environment Variables

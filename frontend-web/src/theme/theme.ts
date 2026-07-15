@@ -25,9 +25,29 @@ export function buildTheme(mode: PaletteMode) {
       MuiPaper: { styleOverrides: { root: { backgroundImage: "none", border: `1px solid ${dark ? "#2C3934" : "#DED8C7"}` } } },
       MuiButton: { defaultProps: { disableElevation: true }, styleOverrides: { root: { minHeight: 46, textTransform: "none", borderRadius: 10 } } },
       MuiIconButton: { styleOverrides: { root: { minWidth: 44, minHeight: 44 } } },
-      MuiTextField: { defaultProps: { variant: "outlined" } },
-      MuiOutlinedInput: { styleOverrides: { root: { borderRadius: 10 } } },
-      MuiDialog: { styleOverrides: { paper: { borderRadius: 18 } } },
+      MuiTextField: { defaultProps: { variant: "outlined", fullWidth: true } },
+      MuiFormLabel: { styleOverrides: { root: { fontWeight: 700 } } },
+      MuiFormHelperText: { styleOverrides: { root: { marginLeft: 2, marginTop: 6, lineHeight: 1.4 } } },
+      MuiOutlinedInput: {
+        styleOverrides: {
+          root: {
+            minHeight: 52,
+            borderRadius: 10,
+            backgroundColor: dark ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.45)",
+            transition: "background-color .15s ease, box-shadow .15s ease",
+            "&:hover": { backgroundColor: dark ? "rgba(255,255,255,.045)" : "#FFFDF7" },
+            "&.Mui-focused": { backgroundColor: dark ? "rgba(255,255,255,.055)" : "#FFFDF7", boxShadow: `0 0 0 3px ${dark ? "rgba(145,215,190,.13)" : "rgba(23,63,53,.1)"}` },
+            "& input[type='date'], & input[type='datetime-local'], & input[type='time']": { colorScheme: dark ? "dark" : "light" },
+            "& input::-webkit-calendar-picker-indicator": { cursor: "pointer", opacity: .85 },
+          },
+          notchedOutline: { borderColor: dark ? "#53635D" : "#AAA796" },
+        },
+      },
+      MuiSelect: { defaultProps: { MenuProps: { PaperProps: { sx: { maxHeight: 340 } } } } },
+      MuiDialog: { styleOverrides: { paper: { borderRadius: 16 } } },
+      MuiDialogTitle: { styleOverrides: { root: { padding: "24px 24px 12px" } } },
+      MuiDialogContent: { styleOverrides: { root: { padding: 24 } } },
+      MuiDialogActions: { styleOverrides: { root: { padding: "12px 24px 24px", gap: 8 } } },
     },
   });
 }

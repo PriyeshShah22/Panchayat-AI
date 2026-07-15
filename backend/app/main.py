@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api import (
     admin_router, ai_router, auth_router, bills_router,
     complaints_router, notices_router, reports_router, residents_router,
-    societies_router, visitors_router,
+    societies_router, visitors_router, notifications_router,
 )
 from app.core.config import settings
 from app.db.base import create_all
@@ -47,6 +47,7 @@ app.include_router(residents_router, prefix=_PREFIX)
 app.include_router(societies_router, prefix=_PREFIX)
 app.include_router(complaints_router, prefix=_PREFIX)
 app.include_router(visitors_router, prefix=_PREFIX)
+app.include_router(notifications_router, prefix=_PREFIX)
 app.include_router(bills_router, prefix=_PREFIX)
 app.include_router(notices_router, prefix=_PREFIX)
 app.include_router(ai_router, prefix=_PREFIX)
