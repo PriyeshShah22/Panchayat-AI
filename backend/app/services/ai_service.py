@@ -137,7 +137,7 @@ Prepare at most one write action per request. You may perform read tools first w
 If required information is missing, ask one short clarifying question and do not call a tool.
 For complaints, infer priority without asking unless the user explicitly gives a priority. Use impact, safety risk, number of people affected, duration, and emotional urgency as signals. Strong emotion alone must not make a harmless issue urgent. Use urgent only for an immediate serious risk such as fire, electrical danger, lift entrapment, flooding, security danger, or loss of an essential service.
 Complaint tool title and description must always be clear, formal English, even when the conversation is Hindi, Marathi, or Hinglish. Preserve the facts and meaning; do not store transliterated Hindi or Marathi. The conversational preview may be in the user's language.
-For a guest pass, only the visitor's name and purpose are required. Arrival time, phone, vehicle number, and duration are optional. NEVER ask for phone, vehicle number, or duration. Set each to null unless the resident volunteers it. Do not delay a pass because optional information is absent. Resolve relative arrival dates using the current society time above. If the resident gives only a clock time, use the next occurrence of that time in IST. Use the resident's linked flat automatically. Once name and purpose are present, call create_visitor_pass immediately and explain that the request will still require admin or committee approval.
+For a guest pass, only the visitor's name and purpose are required. Treat “मुझसे मिलने”, “आपसे मिलने”, “भेटायला”, “to meet me”, and “meeting me” as a complete purpose meaning “Meeting the resident”; do not ask for the purpose again. Arrival time, phone, vehicle number, and duration are optional. NEVER ask for phone, vehicle number, or duration. Set each to null unless the resident volunteers it. Do not delay a pass because optional information is absent. Resolve relative arrival dates using the current society time above. If the resident gives only a clock time, use the next occurrence of that time in IST. “शाम”, “संध्याकाळ”, and “evening” always mean PM; “सुबह”, “सकाळ”, and “morning” mean AM. Use the resident's linked flat automatically. Once name and purpose are present, call create_visitor_pass immediately and explain that the request will still require admin or committee approval.
 For any request to pay maintenance or bills, prepare pay_outstanding_dues. Include every unpaid older month in one combined checkout and explain the combined total clearly.
 Only an admin can publish or remove an announcement; tell non-admin users they lack permission. Before preparing notice deletion, identify one exact existing notice and clearly name it in the confirmation preview.
 The reply language is independent of the website language toggle. {language_hint} Reply in the same language and script as the user's current message. For a short or ambiguous confirmation such as yes, no, okay, haan, or ho, continue the language used in the recent conversation. Use simple words suitable for a low-literacy user.
@@ -332,6 +332,16 @@ def _requests_visitor_pass(message: str) -> bool:
     return any(term in text for term in visitor_terms) and any(term in text for term in action_terms)
 
 
+def _visitor_request_has_required_details(message: str) -> bool:
+    """Require a likely proper name and a clearly stated visit purpose before forcing the write tool."""
+    if not _requests_visitor_pass(message):
+        return False
+    purpose_terms = ("मुझसे मिलने", "आपसे मिलने", "मिलने", "भेटायला", "भेटण्यासाठी", "meet me", "meeting", "delivery", "deliver", "service", "repair", "guest", "family", "friend")
+    ignored = {"visitor", "guest", "gate", "pass", "create", "make", "please"}
+    possible_names = [word for word in re.findall(r"\b[A-Z][A-Za-z'-]{1,}\b", message) if word.lower() not in ignored]
+    return bool(possible_names) and any(term in message.lower() for term in purpose_terms)
+
+
 def _falsely_denies_available_tool(reply: str) -> bool:
     text = (reply or "").lower()
     capability_terms = ("tool access", "option उपलब्ध नहीं", "access नहीं", "नहीं कर सकता", "नहीं कर सकती", "cannot submit", "can't submit", "cannot create", "can't create")
@@ -362,11 +372,13 @@ def _openai_chat(db: Session, user: User, message: str, language: str,
         conversation_summary = _summarize(client, conversation_summary, recent[:-5])
         recent = recent[-5:]
     input_items: list[Any] = [*recent, {"role": "user", "content": message}]
+    force_visitor_tool = "create_visitor_pass" in {tool["name"] for tool in tools} and _visitor_request_has_required_details(message)
     response = client.responses.create(
         model=settings.OPENAI_MODEL,
         instructions=_instructions(user, language, conversation_summary),
         input=input_items,
         tools=tools,
+        tool_choice={"type": "function", "name": "create_visitor_pass"} if force_visitor_tool else "auto",
         parallel_tool_calls=False,
         reasoning={"effort": "low"},
     )

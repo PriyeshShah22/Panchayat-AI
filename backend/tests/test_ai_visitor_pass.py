@@ -13,6 +13,7 @@ from app.services.ai_service import (
     _create_action,
     _falsely_denies_available_tool,
     _requests_visitor_pass,
+    _visitor_request_has_required_details,
     _tools_for,
     confirm_action,
 )
@@ -79,6 +80,8 @@ class AIVisitorPassTests(unittest.TestCase):
 
     def test_hindi_visitor_request_and_false_denial_are_detected(self):
         self.assertTrue(_requests_visitor_pass("Priyesh के लिए visitor pass बना दो"))
+        self.assertTrue(_visitor_request_has_required_details("Priyesh के लिए visitor pass बना दो। वह मुझसे मिलने आ रहा है।"))
+        self.assertFalse(_visitor_request_has_required_details("visitor pass बना दो"))
         self.assertTrue(_falsely_denies_available_tool("इस चैट में tool access नहीं मिल रही। society office जाएँ।"))
         self.assertFalse(_requests_visitor_pass("आज कौन से visitors अंदर हैं?"))
 
