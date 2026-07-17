@@ -356,7 +356,7 @@ export default function AI() {
   }
 
   return (
-    <Stack spacing={{ xs: 0, md: 2.5 }} sx={{ maxWidth: 980, mx: { xs: -2, sm: -3, md: "auto" }, mt: { xs: -2, sm: -3, md: 0 }, mb: { xs: -2, sm: -3, md: 0 }, minHeight: { xs: "calc(100dvh - 64px)", md: "auto" } }}>
+    <Stack spacing={{ xs: 0, md: 2.5 }} sx={{ width: "100%", maxWidth: 980, mx: "auto", height: { xs: "100%", md: "auto" }, minHeight: 0 }}>
       <Box textAlign="center" sx={{ display: { xs: "none", md: "block" } }}>
         <Typography
           variant="h2"
@@ -372,8 +372,8 @@ export default function AI() {
       </Box>
       <Paper
         sx={{
-          minHeight: { xs: "calc(100dvh - 64px)", md: 700 },
-          height: { xs: "calc(100dvh - 64px)", md: "auto" },
+          minHeight: { xs: 0, md: 700 },
+          height: { xs: "100%", md: "auto" },
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",

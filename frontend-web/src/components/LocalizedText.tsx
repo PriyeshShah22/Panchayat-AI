@@ -1,11 +1,11 @@
-import { useI18n } from "../store/language";
+import { translateDynamicSocietyText, useLanguageStore } from "../store/language";
 
 export function useLocalizedTexts(texts: string[]) {
-  const { t } = useI18n();
-  return texts.map(t);
+  const language = useLanguageStore((state) => state.language);
+  return texts.map((text) => translateDynamicSocietyText(text, language));
 }
 
 export function LocalizedText({ children }: { children: string }) {
-  const { t } = useI18n();
-  return <>{t(children)}</>;
+  const language = useLanguageStore((state) => state.language);
+  return <>{translateDynamicSocietyText(children, language)}</>;
 }

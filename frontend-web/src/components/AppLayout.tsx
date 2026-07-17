@@ -99,7 +99,7 @@ export default function AppLayout() {
     </Box>
     <Box sx={{ display: "flex" }}>
       {!mobile && <Box component="aside" sx={{ width: 112, flexShrink: 0, minHeight: "calc(100vh - 80px)", borderRight: "1px solid", borderColor: "divider", py: 3, px: 1.5 }}><Stack spacing={1}>{items.filter((item) => !primary.some((entry) => entry.to === item.to)).map((item) => <Button key={item.to} onClick={() => go(item.to)} color="inherit" sx={{ minHeight: 76, borderRadius: 2, flexDirection: "column", gap: .5, fontSize: 11, bgcolor: active(item.to) ? "#173F35" : "transparent", color: active(item.to) ? "#fff" : "text.secondary", "& .MuiButton-startIcon": { m: 0 } }} startIcon={item.icon}>{t(item.label)}</Button>)}</Stack></Box>}
-      <Box component="main" sx={{ flex: 1, minWidth: 0, p: { xs: 2, sm: 3, lg: 4 }, maxWidth: 1540, mx: "auto" }}><Outlet /></Box>
+      <Box component="main" sx={{ flex: 1, minWidth: 0, p: pathname === "/ai" ? { xs: 0, md: 4 } : { xs: 2, sm: 3, lg: 4 }, maxWidth: 1540, mx: "auto", height: pathname === "/ai" ? { xs: "calc(100dvh - 64px)", md: "auto" } : "auto", overflow: pathname === "/ai" ? { xs: "hidden", md: "visible" } : "visible" }}><Outlet /></Box>
     </Box>
     <Drawer anchor="right" open={mobile && menuOpen} onClose={() => setMenuOpen(false)} PaperProps={{ sx: { width: "min(88vw, 360px)", p: 0, bgcolor: "background.paper", backgroundImage: "none" } }}>
       <Stack sx={{ minHeight: "100%" }}>

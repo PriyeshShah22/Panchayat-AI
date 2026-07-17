@@ -9,7 +9,13 @@ from app.models.resident import Resident
 from app.models.society import Block, Flat, Society
 from app.models.user import Role, User
 from app.models.visitor import Visitor, VisitorStatus
-from app.services.ai_service import _create_action, _tools_for, confirm_action
+from app.services.ai_service import (
+    _create_action,
+    _falsely_denies_available_tool,
+    _requests_visitor_pass,
+    _tools_for,
+    confirm_action,
+)
 
 
 class AIVisitorPassTests(unittest.TestCase):
@@ -48,6 +54,7 @@ class AIVisitorPassTests(unittest.TestCase):
             "expected_at": "2027-01-20T18:00:00+05:30",
             "phone": None,
             "vehicle_number": "mh12ab1234",
+            "duration": "one day",
         })
         self.assertIsNotNone(action)
         self.assertEqual(0, self.db.query(Visitor).count())
@@ -57,11 +64,23 @@ class AIVisitorPassTests(unittest.TestCase):
         visitor = self.db.get(Visitor, result["entity_id"])
         self.assertEqual(VisitorStatus.pending, visitor.status)
         self.assertEqual("MH12AB1234", visitor.vehicle_number)
+        self.assertIn("one day", visitor.purpose)
         targets = self.db.execute(select(UserNotification.user_id).where(UserNotification.kind == "visitor_approval_required")).scalars().all()
         self.assertEqual({self.admin.id, self.committee.id}, set(targets))
 
     def test_user_without_resident_profile_does_not_receive_visitor_tool(self):
         self.assertNotIn("create_visitor_pass", {tool["name"] for tool in _tools_for(self.admin)})
+
+    def test_optional_contact_fields_are_explicitly_never_solicited(self):
+        tool = next(tool for tool in _tools_for(self.resident) if tool["name"] == "create_visitor_pass")
+        properties = tool["parameters"]["properties"]
+        self.assertIn("Never ask", properties["phone"]["description"])
+        self.assertIn("Never ask", properties["vehicle_number"]["description"])
+
+    def test_hindi_visitor_request_and_false_denial_are_detected(self):
+        self.assertTrue(_requests_visitor_pass("Priyesh के लिए visitor pass बना दो"))
+        self.assertTrue(_falsely_denies_available_tool("इस चैट में tool access नहीं मिल रही। society office जाएँ।"))
+        self.assertFalse(_requests_visitor_pass("आज कौन से visitors अंदर हैं?"))
 
 
 if __name__ == "__main__":

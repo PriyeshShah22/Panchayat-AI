@@ -278,8 +278,6 @@ const caseInsensitiveWords = new Map(
 );
 
 const societyPhrases: Array<[string, string, string]> = [
-  ["पानी की आपूर्ति disruption in block b for the last two hours", "ब्लॉक B में पिछले दो घंटों से पानी की आपूर्ति बाधित", "ब्लॉक B मध्ये मागील दोन तासांपासून पाणीपुरवठा खंडित"],
-  ["water supply disruption in block b for the last two hours", "ब्लॉक B में पिछले दो घंटों से पानी की आपूर्ति बाधित", "ब्लॉक B मध्ये मागील दोन तासांपासून पाणीपुरवठा खंडित"],
   ["bedroom roof se pani leakage", "बेडरूम की छत से पानी का रिसाव", "बेडरूमच्या छतामधून पाण्याची गळती"],
   ["bedroom ke roof se pani ka leak ho raha hai", "बेडरूम की छत से पानी रिस रहा है", "बेडरूमच्या छतामधून पाणी गळत आहे"],
   ["problem aaj (today) se start hui hai", "समस्या आज से शुरू हुई है", "समस्या आजपासून सुरू झाली आहे"],
@@ -306,6 +304,46 @@ const societyPhrases: Array<[string, string, string]> = [
 ];
 
 const societyContentMarker = /[\u0900-\u097f]|\b(leak|leakage|pani|water|pipe|sink|roof|lift|pothole|road|repair|garbage|waste|light|electric|parking|noise|security|safety|injury|complaint|problem|disruption|block)\b/i;
+
+const societyWords: Record<string, [string, string]> = {
+  a: ["एक", "एक"], an: ["एक", "एक"], the: ["", ""], and: ["और", "आणि"], or: ["या", "किंवा"],
+  is: ["है", "आहे"], are: ["हैं", "आहेत"], was: ["था", "होता"], were: ["थे", "होते"], has: ["है", "आहे"], have: ["है", "आहे"],
+  in: ["में", "मध्ये"], on: ["पर", "वर"], at: ["पर", "येथे"], from: ["से", "पासून"], for: ["के लिए", "साठी"], to: ["को", "ला"], of: ["का", "चा"],
+  this: ["यह", "ही"], that: ["वह", "ती"], my: ["मेरे", "माझ्या"], our: ["हमारे", "आमच्या"], near: ["पास", "जवळ"],
+  since: ["से", "पासून"], last: ["पिछले", "मागील"], past: ["पिछले", "मागील"], today: ["आज", "आज"], yesterday: ["कल", "काल"],
+  hour: ["घंटा", "तास"], hours: ["घंटे", "तास"], day: ["दिन", "दिवस"], days: ["दिन", "दिवस"], week: ["सप्ताह", "आठवडा"], weeks: ["सप्ताह", "आठवडे"], month: ["महीना", "महिना"], months: ["महीने", "महिने"], year: ["वर्ष", "वर्ष"], years: ["वर्षों", "वर्षां"],
+  morning: ["सुबह", "सकाळ"], evening: ["शाम", "संध्याकाळ"], night: ["रात", "रात्र"], continuously: ["लगातार", "सतत"],
+  water: ["पानी", "पाणी"], supply: ["आपूर्ति", "पुरवठा"], disruption: ["बाधा", "खंडित सेवा"], leakage: ["रिसाव", "गळती"], leak: ["रिसाव", "गळती"], leaking: ["रिस रहा", "गळत आहे"],
+  pipe: ["पाइप", "पाईप"], tap: ["नल", "नळ"], drain: ["नाली", "नाला"], bathroom: ["स्नानघर", "स्नानगृह"], bedroom: ["शयनकक्ष", "शयनकक्ष"], kitchen: ["रसोई", "स्वयंपाकघर"], toilet: ["शौचालय", "शौचालय"],
+  roof: ["छत", "छत"], ceiling: ["छत", "छत"], wall: ["दीवार", "भिंत"], walls: ["दीवारें", "भिंती"], floor: ["मंजिल", "मजला"], flat: ["फ्लैट", "फ्लॅट"], wing: ["विंग", "विंग"], block: ["ब्लॉक", "विंग"],
+  lift: ["लिफ्ट", "लिफ्ट"], elevator: ["लिफ्ट", "लिफ्ट"], stuck: ["फंसी", "अडकली"], broken: ["टूटा हुआ", "तुटलेले"], stopped: ["बंद", "बंद"], working: ["काम कर रहा", "कार्यरत"],
+  electricity: ["बिजली", "वीज"], electric: ["बिजली", "वीज"], power: ["बिजली", "वीज"], light: ["बत्ती", "दिवा"], lights: ["बत्तियाँ", "दिवे"],
+  garbage: ["कचरा", "कचरा"], waste: ["कचरा", "कचरा"], dirty: ["गंदा", "अस्वच्छ"], smell: ["दुर्गंध", "दुर्गंधी"], cleaning: ["सफाई", "स्वच्छता"],
+  road: ["सड़क", "रस्ता"], pothole: ["गड्ढा", "खड्डा"], potholes: ["गड्ढे", "खड्डे"], crack: ["दरार", "भेग"], cracks: ["दरारें", "भेगा"],
+  parking: ["पार्किंग", "पार्किंग"], vehicle: ["वाहन", "वाहन"], unauthorized: ["अनधिकृत", "अनधिकृत"], security: ["सुरक्षा", "सुरक्षा"], guard: ["सुरक्षा कर्मी", "सुरक्षा रक्षक"], camera: ["कैमरा", "कॅमेरा"],
+  noise: ["शोर", "आवाज"], loud: ["तेज़", "मोठा"], dog: ["कुत्ता", "कुत्रा"], dogs: ["कुत्ते", "कुत्रे"], mosquito: ["मच्छर", "डास"], mosquitoes: ["मच्छर", "डास"], pest: ["कीट", "कीड"],
+  problem: ["समस्या", "समस्या"], issue: ["समस्या", "समस्या"], complaint: ["शिकायत", "तक्रार"], damage: ["नुकसान", "नुकसान"], damaged: ["क्षतिग्रस्त", "नुकसान झालेले"], danger: ["खतरा", "धोका"], dangerous: ["खतरनाक", "धोकादायक"], safety: ["सुरक्षा", "सुरक्षा"],
+  urgent: ["तत्काल", "तातडीचे"], urgently: ["तुरंत", "तातडीने"], repair: ["मरम्मत", "दुरुस्ती"], inspect: ["जाँच करें", "तपासणी करा"], inspection: ["जाँच", "तपासणी"], resolve: ["समाधान करें", "सोडवा"], fix: ["ठीक करें", "दुरुस्त करा"],
+  please: ["कृपया", "कृपया"], immediately: ["तुरंत", "तात्काळ"], causing: ["कारण बन रहा", "कारणीभूत ठरत आहे"], caused: ["कारण बना", "कारणीभूत ठरले"], residents: ["निवासियों", "रहिवाशांना"], resident: ["निवासी", "रहिवासी"], common: ["सामुदायिक", "सामायिक"], area: ["क्षेत्र", "भाग"],
+};
+
+const devanagariLetters: Record<string, string> = {
+  a: "अ", b: "ब", c: "क", d: "द", e: "ए", f: "फ", g: "ग", h: "ह", i: "इ", j: "ज", k: "क", l: "ल", m: "म",
+  n: "न", o: "ओ", p: "प", q: "क", r: "र", s: "स", t: "त", u: "उ", v: "व", w: "व", x: "क्स", y: "य", z: "ज़",
+};
+
+function transliterateUnknownWord(word: string) {
+  if (/^[A-Z]$/.test(word) || /^[A-Z]{1,3}\d+$/.test(word)) return word;
+  return word.toLowerCase().split("").map((letter) => devanagariLetters[letter] ?? letter).join("");
+}
+
+function translateDynamicWords(text: string, language: Exclude<AppLanguage, "en">) {
+  return text.replace(/[A-Za-z][A-Za-z'-]*/g, (word) => {
+    const localized = societyWords[word.toLowerCase()];
+    if (localized) return localized[language === "hi" ? 0 : 1];
+    return transliterateUnknownWord(word);
+  }).replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?])/g, "$1").trim();
+}
 
 export function translateSocietyText(text: string, language: AppLanguage) {
   if (language === "en" || !text.trim()) return text;
@@ -337,6 +375,20 @@ export function translateSocietyText(text: string, language: AppLanguage) {
     );
   }
   return translated;
+}
+
+export function translateDynamicSocietyText(text: string, language: AppLanguage) {
+  if (language === "en" || !text.trim()) return text;
+  const exact = words[text]?.[language];
+  if (exact) return exact;
+  const caseInsensitiveKey = caseInsensitiveWords.get(text.toLocaleLowerCase("en-IN"));
+  if (caseInsensitiveKey) return words[caseInsensitiveKey][language];
+  let translated = text;
+  for (const [english, hindi, marathi] of societyPhrases) {
+    const escaped = english.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    translated = translated.replace(new RegExp(escaped, "gi"), language === "hi" ? hindi : marathi);
+  }
+  return translateDynamicWords(translated, language);
 }
 
 export function useI18n() {
