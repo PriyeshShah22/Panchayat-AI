@@ -69,14 +69,47 @@ class AIVisitorPassTests(unittest.TestCase):
         targets = self.db.execute(select(UserNotification.user_id).where(UserNotification.kind == "visitor_approval_required")).scalars().all()
         self.assertEqual({self.admin.id, self.committee.id}, set(targets))
 
-    def test_user_without_resident_profile_does_not_receive_visitor_tool(self):
-        self.assertNotIn("create_visitor_pass", {tool["name"] for tool in _tools_for(self.admin)})
+    def test_admin_and_committee_receive_visitor_tool_without_resident_profile(self):
+        self.assertIn("create_visitor_pass", {tool["name"] for tool in _tools_for(self.admin)})
+        self.assertIn("create_visitor_pass", {tool["name"] for tool in _tools_for(self.committee)})
 
     def test_optional_contact_fields_are_explicitly_never_solicited(self):
         tool = next(tool for tool in _tools_for(self.resident) if tool["name"] == "create_visitor_pass")
         properties = tool["parameters"]["properties"]
         self.assertIn("Never ask", properties["phone"]["description"])
         self.assertIn("Never ask", properties["vehicle_number"]["description"])
+
+    def test_admin_can_prepare_pass_for_a_specific_resident_flat(self):
+        result, action = _create_action(self.db, self.admin, "create_visitor_pass", {
+            "visitor_name": "Priyesh",
+            "purpose": "Meeting the resident",
+            "expected_at": "2027-01-20T18:30:00+05:30",
+            "phone": None,
+            "vehicle_number": None,
+            "duration": None,
+            "target_wing": "A",
+            "target_flat": "101",
+        })
+        self.assertEqual("awaiting_confirmation", result["status"])
+        self.assertIsNotNone(action)
+        confirmed = confirm_action(self.db, self.admin, action.id)
+        visitor = self.db.get(Visitor, confirmed["entity_id"])
+        self.assertEqual(self.resident.id, visitor.host_id)
+        self.assertEqual("101", visitor.flat.number)
+
+    def test_admin_missing_target_flat_gets_a_clarifying_error(self):
+        result, action = _create_action(self.db, self.admin, "create_visitor_pass", {
+            "visitor_name": "Priyesh",
+            "purpose": "Meeting the resident",
+            "expected_at": None,
+            "phone": None,
+            "vehicle_number": None,
+            "duration": None,
+            "target_wing": None,
+            "target_flat": None,
+        })
+        self.assertIsNone(action)
+        self.assertIn("wing and flat", result["error"])
 
     def test_hindi_visitor_request_and_false_denial_are_detected(self):
         self.assertTrue(_requests_visitor_pass("Priyesh के लिए visitor pass बना दो"))
@@ -101,6 +134,8 @@ class AIVisitorPassTests(unittest.TestCase):
         self.assertTrue(_requests_visitor_pass(message))
         self.assertTrue(_visitor_request_has_required_details(message, history))
         self.assertFalse(_visitor_request_has_required_details("I need a visitor pass", []))
+        follow_up_history = [{"role": "user", "content": "I need a guest pass for Priyesh, who is meeting the resident."}]
+        self.assertTrue(_visitor_request_has_required_details("Wing A, flat 101", follow_up_history))
 
 
 if __name__ == "__main__":

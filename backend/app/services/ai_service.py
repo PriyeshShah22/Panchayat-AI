@@ -19,6 +19,8 @@ from app.models.bill import Bill, BillStatus
 from app.models.chat import ChatMessage
 from app.models.complaint import Complaint
 from app.models.notice import Notice
+from app.models.resident import Resident
+from app.models.society import Flat
 from app.models.user import User
 from app.models.visitor import Visitor, VisitorStatus
 from app.schemas.complaint import ComplaintCreate
@@ -73,7 +75,7 @@ def _tools_for(user: User) -> List[dict]:
         ),
         _tool(
             "create_visitor_pass",
-            "Prepare a guest visitor-pass request for the authenticated resident's linked flat. It remains pending for admin or committee approval and is never executed without resident confirmation.",
+            "Prepare a guest visitor-pass request. Residents use their linked flat automatically. Admin and committee users may create one on behalf of a specified society wing and flat. It remains pending for approval and is never executed without confirmation.",
             {
                 "visitor_name": {"type": "string", "minLength": 2, "maxLength": 150},
                 "purpose": {"type": "string", "minLength": 2, "maxLength": 200},
@@ -81,15 +83,20 @@ def _tools_for(user: User) -> List[dict]:
                 "phone": {"type": ["string", "null"], "maxLength": 20, "description": "Optional. Never ask for this; use null unless the resident volunteered it."},
                 "vehicle_number": {"type": ["string", "null"], "maxLength": 50, "description": "Optional. Never ask for this; use null unless the resident volunteered it."},
                 "duration": {"type": ["string", "null"], "maxLength": 80, "description": "Expected visit duration in the resident's own words, otherwise null."},
+                "target_wing": {"type": ["string", "null"], "maxLength": 10, "description": "Admin/committee only: the host wing, such as A. Residents must use null because their linked flat is automatic."},
+                "target_flat": {"type": ["string", "null"], "maxLength": 10, "description": "Admin/committee only: the host flat number, such as 101. Residents must use null because their linked flat is automatic."},
             },
-            ["visitor_name", "purpose", "expected_at", "phone", "vehicle_number", "duration"],
+            ["visitor_name", "purpose", "expected_at", "phone", "vehicle_number", "duration", "target_wing", "target_flat"],
         ),
         _tool("pay_outstanding_dues",
               "Prepare one checkout for all outstanding maintenance months belonging to the authenticated resident. The server resolves every bill and exact combined amount.",
               {}, []),
     ]
     if "resident" not in user.role_names or not user.resident:
-        tools = [tool for tool in tools if tool["name"] not in {"create_complaint", "create_visitor_pass"}]
+        tools = [tool for tool in tools if tool["name"] != "create_complaint"]
+    can_request_for_flat = user.is_superuser or bool({"admin", "committee"} & set(user.role_names))
+    if ("resident" not in user.role_names or not user.resident) and not can_request_for_flat:
+        tools = [tool for tool in tools if tool["name"] != "create_visitor_pass"]
     if user.is_superuser or "admin" in user.role_names:
         tools.append(_tool(
             "publish_announcement",
@@ -139,6 +146,7 @@ For complaints, infer priority without asking unless the user explicitly gives a
 Complaint tool title and description must always be clear, formal English, even when the conversation is Hindi, Marathi, or Hinglish. Preserve the facts and meaning; do not store transliterated Hindi or Marathi. The conversational preview may be in the user's language.
 For a guest pass, only the visitor's name and purpose are required. Treat “मुझसे मिलने”, “आपसे मिलने”, “भेटायला”, “to meet me”, and “meeting me” as a complete purpose meaning “Meeting the resident”; do not ask for the purpose again. Arrival time, phone, vehicle number, and duration are optional. NEVER ask for phone, vehicle number, or duration. Set each to null unless the resident volunteers it. Do not delay a pass because optional information is absent. Resolve relative arrival dates using the current society time above. If the resident gives only a clock time, use the next occurrence of that time in IST. “शाम”, “संध्याकाळ”, and “evening” always mean PM; “सुबह”, “सकाळ”, and “morning” mean AM. Use the resident's linked flat automatically. Once name and purpose are present, call create_visitor_pass immediately and explain that the request will still require admin or committee approval.
 Reuse visitor name, purpose, arrival time, and optional details supplied by the user in recent conversation turns. If a user first introduces an arriving friend and then asks for a visitor or guest pass, treat the two turns as one request. Never repeat a previous capability denial and never ask the user to provide the same details again.
+For an admin or committee account without a linked household, create_visitor_pass is still available for creating a pass on behalf of a resident. In that case target_wing and target_flat are required. Ask one short question for both together if they are missing, then reuse all earlier visitor details when the user answers. Never say the visitor-pass tool is unavailable merely because this account has no linked flat.
 For any request to pay maintenance or bills, prepare pay_outstanding_dues. Include every unpaid older month in one combined checkout and explain the combined total clearly.
 Only an admin can publish or remove an announcement; tell non-admin users they lack permission. Before preparing notice deletion, identify one exact existing notice and clearly name it in the confirmation preview.
 The reply language is independent of the website language toggle. {language_hint} Reply in the same language and script as the user's current message. For a short or ambiguous confirmation such as yes, no, okay, haan, or ho, continue the language used in the recent conversation. Use simple words suitable for a low-literacy user.
@@ -219,8 +227,33 @@ def _create_action(db: Session, user: User, action_type: str, args: dict) -> tup
         category = classify_complaint(f"{args['title']} {args['description']}")
         summary = f"Submit a {category.lower()} complaint: {args['title']}"
     elif action_type == "create_visitor_pass":
-        if "resident" not in user.role_names or not user.resident or not user.society_id:
-            return {"error": "A linked resident household is required to request a visitor pass."}, None
+        if not user.society_id:
+            return {"error": "No society is linked to this account."}, None
+        can_request_for_flat = user.is_superuser or bool({"admin", "committee"} & set(user.role_names))
+        if user.resident and "resident" in user.role_names:
+            flat = user.resident.flat
+            host_id = user.id
+        elif can_request_for_flat:
+            target_wing = (args.get("target_wing") or "").strip().upper()
+            target_flat = (args.get("target_flat") or "").strip()
+            if not target_wing or not target_flat:
+                return {"error": "Please ask for the host's wing and flat number together before preparing this visitor pass."}, None
+            candidates = db.execute(select(Flat).where(
+                Flat.society_id == user.society_id,
+                Flat.number == target_flat,
+            )).scalars().all()
+            flat = next((item for item in candidates if item.block.name.upper() == target_wing), None)
+            if not flat:
+                return {"error": "That wing and flat were not found in this society. Please check both values."}, None
+            host = db.execute(select(User).join(Resident, Resident.user_id == User.id).where(
+                Resident.flat_id == flat.id,
+                User.society_id == user.society_id,
+            ).limit(1)).scalars().first()
+            if not host:
+                return {"error": "No resident account is linked to that wing and flat."}, None
+            host_id = host.id
+        else:
+            return {"error": "A resident, administrator, or committee account is required to request a visitor pass."}, None
         expected_at = args.get("expected_at")
         if expected_at:
             try:
@@ -235,9 +268,10 @@ def _create_action(db: Session, user: User, action_type: str, args: dict) -> tup
             "vehicle_number": (args.get("vehicle_number") or "").strip().upper() or None,
             "duration": (args.get("duration") or "").strip() or None,
             "society_id": user.society_id,
-            "flat_id": user.resident.flat_id,
+            "flat_id": flat.id,
+            "host_id": host_id,
         }
-        summary = f"Request a guest pass for {payload['visitor_name']} to visit {user.resident.flat.block.name}-{user.resident.flat.number}"
+        summary = f"Request a guest pass for {payload['visitor_name']} to visit {flat.block.name}-{flat.number}"
     elif action_type == "pay_outstanding_dues":
         bills = db.execute(select(Bill).where(
             Bill.billed_user_id == user.id,
@@ -344,13 +378,21 @@ def _visitor_request_has_required_details(message: str, history: list[dict] | No
     supply its facts, but assistant text is excluded so a hallucinated detail or
     denial can never become action input.
     """
-    if not _requests_visitor_pass(message):
-        return False
-    prior_user_text = " ".join(
+    prior_user_messages = [
         str(item.get("content") or "")
         for item in _safe_history(history)
         if item.get("role") == "user"
-    )
+    ]
+    supplies_flat_target = bool(re.search(
+        r"\b(?:wing|block)\s*[A-D]\b.*\b(?:flat\s*)?[1-4]0[1-4]\b|\b[A-D]\s*[-/]\s*[1-4]0[1-4]\b",
+        message,
+        flags=re.IGNORECASE,
+    ))
+    if not _requests_visitor_pass(message) and not (
+        supplies_flat_target and any(_requests_visitor_pass(item) for item in prior_user_messages)
+    ):
+        return False
+    prior_user_text = " ".join(prior_user_messages)
     context = f"{prior_user_text} {message}".strip()
     purpose_terms = ("मुझसे मिलने", "आपसे मिलने", "मिलने", "भेटायला", "भेटण्यासाठी", "meet me", "meeting", "delivery", "deliver", "service", "repair", "guest", "family", "friend")
     ignored = {
@@ -540,9 +582,16 @@ def confirm_action(db: Session, user: User, action_id: int, language: str = "en-
                 f"तक्रार #{complaint.id} नोंदवली आहे.",
             )
         elif action.action_type == "create_visitor_pass":
-            if "resident" not in user.role_names or not user.resident or not user.society_id:
-                raise PermissionError("A linked resident household is required")
-            if payload["society_id"] != user.society_id or payload["flat_id"] != user.resident.flat_id:
+            can_request_for_flat = user.is_superuser or bool({"admin", "committee"} & set(user.role_names))
+            if not user.society_id or (not can_request_for_flat and not ("resident" in user.role_names and user.resident)):
+                raise PermissionError("This account can no longer request a visitor pass")
+            if payload["society_id"] != user.society_id:
+                raise PermissionError("The society changed; please create the request again")
+            flat = db.get(Flat, payload["flat_id"])
+            host = db.get(User, payload["host_id"])
+            if not flat or flat.society_id != user.society_id or not host or host.society_id != user.society_id:
+                raise PermissionError("The host household changed; please create the request again")
+            if not can_request_for_flat and payload["flat_id"] != user.resident.flat_id:
                 raise PermissionError("The linked household changed; please create the request again")
             expected_at = datetime.fromisoformat(payload["expected_at"]) if payload.get("expected_at") else None
             purpose = payload["purpose"]
@@ -550,8 +599,8 @@ def confirm_action(db: Session, user: User, action_id: int, language: str = "en-
                 purpose = f"{purpose} (Expected duration: {payload['duration']})"
             visitor = Visitor(
                 society_id=user.society_id,
-                flat_id=user.resident.flat_id,
-                host_id=user.id,
+                flat_id=flat.id,
+                host_id=host.id,
                 name=payload["visitor_name"],
                 purpose=purpose,
                 phone=payload.get("phone"),
@@ -562,7 +611,6 @@ def confirm_action(db: Session, user: User, action_id: int, language: str = "en-
             )
             db.add(visitor)
             db.flush()
-            flat = user.resident.flat
             notify_roles(
                 db,
                 society_id=user.society_id,
