@@ -17,6 +17,15 @@ class SarvamUnavailable(RuntimeError):
     pass
 
 
+def _should_use_fallback(response: httpx.Response) -> bool:
+    if response.status_code in {402, 429}:
+        return True
+    if response.status_code != 403:
+        return False
+    body = response.text.lower()
+    return any(marker in body for marker in ("credit", "quota", "balance", "exhaust", "limit"))
+
+
 def _source_language(data: dict | None) -> str | None:
     """Normalize both current and legacy Sarvam source-language fields."""
     if not data:
@@ -38,10 +47,10 @@ def translate_audio(audio: bytes, filename: str, content_type: str, language_cod
         raise ValueError("Unsupported audio format. Please record WebM, WAV, MP3, AAC, FLAC, OGG, or M4A audio.")
     requested_language = language_code if language_code in {"hi-IN", "mr-IN", "en-IN"} else "unknown"
 
-    def request(client: httpx.Client, detected_language: str, mode: str = "translate") -> httpx.Response:
+    def request(client: httpx.Client, api_key: str, detected_language: str, mode: str = "translate") -> httpx.Response:
         return client.post(
                 f"{settings.SARVAM_API_BASE_URL.rstrip('/')}/speech-to-text",
-                headers={"api-subscription-key": settings.SARVAM_API_KEY},
+                headers={"api-subscription-key": api_key},
                 files={"file": (filename or "recording.webm", audio, normalized_content_type)},
                 data={
                     "model": settings.SARVAM_STT_MODEL,
@@ -52,15 +61,19 @@ def translate_audio(audio: bytes, filename: str, content_type: str, language_cod
 
     try:
         with httpx.Client(timeout=35.0) as client:
-            response = request(client, requested_language)
+            active_key = settings.SARVAM_API_KEY
+            response = request(client, active_key, requested_language)
+            if settings.SARVAM_FALLBACK_API_KEY and _should_use_fallback(response):
+                active_key = settings.SARVAM_FALLBACK_API_KEY
+                response = request(client, active_key, requested_language)
             if response.is_success and not str(response.json().get("transcript") or "").strip() and requested_language != "unknown":
-                response = request(client, "unknown")
+                response = request(client, active_key, "unknown")
             detection_data = None
             if response.is_success and requested_language == "unknown" and not _source_language(response.json()):
                 # Translation text is English, so it cannot reveal whether the
                 # speaker used Hindi or Marathi. Ask Saaras only for the missing
                 # source-language metadata while retaining the translated text.
-                detection_response = request(client, "unknown", "transcribe")
+                detection_response = request(client, active_key, "unknown", "transcribe")
                 if detection_response.is_success:
                     detection_data = detection_response.json()
     except httpx.RequestError as exc:

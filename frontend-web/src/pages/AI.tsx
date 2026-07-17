@@ -11,6 +11,8 @@ import {
   Stack,
   TextField,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import {
   AutoAwesomeRounded,
@@ -69,6 +71,8 @@ function recordingFormat() {
 
 export default function AI() {
   const { t } = useI18n();
+  const theme = useTheme();
+  const mobile = useMediaQuery(theme.breakpoints.down("md"));
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -92,6 +96,7 @@ export default function AI() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animationRef = useRef<number | null>(null);
+  const holdRequestedRef = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -271,6 +276,10 @@ export default function AI() {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { autoGainControl: true, channelCount: 1 },
       });
+      if (mobile && !holdRequestedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = stream;
       chunksRef.current = [];
       setRecording(true);
@@ -308,6 +317,17 @@ export default function AI() {
     if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
     setRecording(false);
   }
+  function beginHold(event: React.PointerEvent<HTMLButtonElement>) {
+    if (!mobile || busy || recording) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    holdRequestedRef.current = true;
+    void startRecording();
+  }
+  function endHold() {
+    if (!mobile) return;
+    holdRequestedRef.current = false;
+    if (recording || recorderRef.current?.state === "recording") stopRecording();
+  }
   async function decide(
     action: Proposal,
     decision: "confirm" | "cancel",
@@ -337,8 +357,8 @@ export default function AI() {
   }
 
   return (
-    <Stack spacing={2.5} sx={{ maxWidth: 980, mx: "auto" }}>
-      <Box textAlign="center">
+    <Stack spacing={{ xs: 0, md: 2.5 }} sx={{ maxWidth: 980, mx: { xs: -2, sm: -3, md: "auto" }, mt: { xs: -2, sm: -3, md: 0 }, mb: { xs: -2, sm: -3, md: 0 }, minHeight: { xs: "calc(100dvh - 64px)", md: "auto" } }}>
+      <Box textAlign="center" sx={{ display: { xs: "none", md: "block" } }}>
         <Chip
           icon={<AutoAwesomeRounded />}
           label="Sarvam + OpenAI agent"
@@ -359,23 +379,26 @@ export default function AI() {
       </Box>
       <Paper
         sx={{
-          minHeight: { xs: 620, md: 700 },
+          minHeight: { xs: "calc(100dvh - 64px)", md: 700 },
+          height: { xs: "calc(100dvh - 64px)", md: "auto" },
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           boxShadow: "0 22px 70px rgba(23,63,53,.12)",
+          borderRadius: { xs: 0, md: 3 },
+          border: { xs: 0, md: undefined },
         }}
       >
         <Stack
           direction="row"
           alignItems="center"
           spacing={1.5}
-          sx={{ p: 2, bgcolor: "#173F35", color: "white" }}
+          sx={{ p: { xs: 1.5, md: 2 }, minHeight: { xs: 64, md: "auto" }, bgcolor: "#173F35", color: "white" }}
         >
           <Box
             sx={{
-              width: 46,
-              height: 46,
+              width: { xs: 40, md: 46 },
+              height: { xs: 40, md: 46 },
               borderRadius: 2,
               bgcolor: "rgba(255,255,255,.12)",
               display: "grid",
@@ -406,7 +429,8 @@ export default function AI() {
             p: { xs: 2, md: 3 },
             flex: 1,
             overflowY: "auto",
-            maxHeight: 540,
+            minHeight: 0,
+            maxHeight: { xs: "none", md: 540 },
           }}
           aria-live="polite"
         >
@@ -489,7 +513,7 @@ export default function AI() {
         </Stack>
         <Box
           sx={{
-            p: 2,
+            p: { xs: 1.25, sm: 2 },
             borderTop: 1,
             borderColor: "divider",
             bgcolor: "background.default",
@@ -506,12 +530,19 @@ export default function AI() {
           )}
           <Stack direction="row" spacing={1} alignItems="center">
             <IconButton
-              onClick={recording ? stopRecording : startRecording}
+              onClick={mobile ? undefined : recording ? stopRecording : startRecording}
+              onPointerDown={beginHold}
+              onPointerUp={endHold}
+              onPointerCancel={endHold}
+              onLostPointerCapture={endHold}
               disabled={busy}
-              aria-label={recording ? "Stop recording" : "Start voice request"}
+              aria-label={mobile ? "Hold to record a voice request" : recording ? "Stop recording" : "Start voice request"}
               sx={{
                 width: 54,
                 height: 54,
+                flexShrink: 0,
+                touchAction: "none",
+                userSelect: "none",
                 bgcolor: recording ? "error.main" : "primary.main",
                 color: "white",
                 "&:hover": {
@@ -526,11 +557,12 @@ export default function AI() {
                 elevation={0}
                 sx={{
                   flex: 1,
-                  height: 68,
-                  px: 2,
+                  height: { xs: 64, sm: 68 },
+                  minWidth: 0,
+                  px: { xs: 1.25, sm: 2 },
                   display: "grid",
-                  gridTemplateColumns: "auto 1fr auto",
-                  gap: 1.5,
+                  gridTemplateColumns: { xs: "1fr auto", sm: "auto 1fr auto" },
+                  gap: { xs: .75, sm: 1.5 },
                   alignItems: "center",
                   overflow: "hidden",
                   color: "white",
@@ -545,6 +577,7 @@ export default function AI() {
                     borderRadius: "50%",
                     bgcolor: "#7EE2B8",
                     boxShadow: "0 0 0 7px rgba(126,226,184,.12)",
+                    display: { xs: "none", sm: "block" },
                   }}
                 />
                 <Box sx={{ minWidth: 0 }}>
@@ -556,10 +589,7 @@ export default function AI() {
                       {t("Tap when finished")}
                     </Typography>
                   </Stack>
-                  <canvas
-                    ref={canvasRef}
-                    style={{ display: "block", width: "100%", height: 34 }}
-                  />
+                  <Box sx={{ width: "100%", height: 36, minHeight: 36, overflow: "visible", display: "flex", alignItems: "center" }}><canvas ref={canvasRef} style={{ display: "block", width: "100%", height: 36, flex: 1 }} /></Box>
                 </Box>
                 <Chip
                   label={`${seconds}s`}
@@ -598,11 +628,11 @@ export default function AI() {
             </IconButton>
           </Stack>
           {recording && (
-            <Typography variant="caption" color="text.secondary">
-              Moving bars mean your voice is being heard. Tap stop when
-              finished.
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75 }}>
+              {mobile ? "Keep holding while you speak. Release to send." : "Moving bars mean your voice is being heard. Tap stop when finished."}
             </Typography>
           )}
+          {!recording && mobile && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: .75, ml: .5 }}>{t("Hold the microphone to talk")}</Typography>}
         </Box>
       </Paper>
     </Stack>

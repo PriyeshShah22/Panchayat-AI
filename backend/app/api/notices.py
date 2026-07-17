@@ -50,7 +50,7 @@ def delete_notice(notice_id: int, db: Session = Depends(get_db),
     n = db.get(Notice, notice_id)
     if not n:
         raise HTTPException(status_code=404, detail="Notice not found")
-    require_any_role(current, ["admin", "committee"])
+    require_any_role(current, ["admin"])
     if not current.is_superuser and n.society_id != current.society_id:
         raise HTTPException(status_code=403, detail="Forbidden")
     db.delete(n)

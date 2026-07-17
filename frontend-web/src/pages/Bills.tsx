@@ -577,24 +577,33 @@ function Empty() {
   );
 }
 function Download({ bill }: { bill: Bill }) {
+  const [downloading, setDownloading] = useState(false);
   return (
     <Button
       variant="outlined"
       color="inherit"
       startIcon={<DownloadRounded />}
+      disabled={downloading}
       onClick={async () => {
-        const response = await api.get(`/bills/${bill.id}/pdf`, {
-          responseType: "blob",
-        });
-        const url = URL.createObjectURL(response.data);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `${bill.bill_number}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
+        setDownloading(true);
+        try {
+          const response = await api.get(`/bills/${bill.id}/pdf`, { responseType: "blob" });
+          const url = URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${bill.bill_number}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (error: any) {
+          enqueueSnackbar(error?.response?.data?.detail || "Receipt could not be downloaded", { variant: "error" });
+        } finally {
+          setDownloading(false);
+        }
       }}
     >
-      Receipt
+      {downloading ? "Preparing…" : "Receipt"}
     </Button>
   );
 }

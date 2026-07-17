@@ -1,10 +1,10 @@
 """Per-resident billing, privileged ledger entry, and verified Razorpay checkout."""
 import json
-import os
+import io
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -21,7 +21,7 @@ from app.schemas.bill import BillCreate, BillOut, DuesSummaryOut, MonthlyBilling
 from app.services.billing_service import MonthlyBillingConflict, apply_late_fees_and_overdue, create_society_monthly_bills, record_payment
 from app.services.razorpay_service import configured as razorpay_configured
 from app.services.razorpay_service import create_order, verify_checkout_signature, verify_webhook_signature
-from app.services.report_service import save_bill_pdf
+from app.services.report_service import generate_bill_pdf
 
 router = APIRouter(prefix="/bills", tags=["bills"])
 MANAGERS = {"admin", "committee"}
@@ -200,6 +200,9 @@ async def razorpay_webhook(request: Request, x_razorpay_signature: str = Header(
 def bill_pdf(bill_id: int, db: Session = Depends(get_db), current: User = Depends(get_current_user)):
     bill = _get_bill(db, bill_id); _authorize_bill(current, bill)
     flat = db.get(Flat, bill.flat_id); resident = db.get(User, bill.billed_user_id) if bill.billed_user_id else None
-    path = os.path.join(os.path.abspath(settings.UPLOAD_DIR), f"{bill.bill_number}.pdf")
-    save_bill_pdf(bill, f"{flat.number if flat else bill.flat_id}", resident.full_name if resident else "Resident")
-    return FileResponse(path, media_type="application/pdf", filename=f"{bill.bill_number}.pdf")
+    pdf = generate_bill_pdf(bill, f"{flat.number if flat else bill.flat_id}", resident.full_name if resident else "Resident")
+    return StreamingResponse(
+        io.BytesIO(pdf),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{bill.bill_number}.pdf"'},
+    )

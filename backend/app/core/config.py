@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 
     # Sarvam AI speech-to-text translation (Indic audio -> English text)
     SARVAM_API_KEY: Optional[str] = None
+    SARVAM_FALLBACK_API_KEY: Optional[str] = None
     SARVAM_STT_MODEL: str = "saaras:v3"
     SARVAM_API_BASE_URL: str = "https://api.sarvam.ai"
 

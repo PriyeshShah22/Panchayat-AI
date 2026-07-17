@@ -24,6 +24,7 @@ The agent can:
 - Launch the real combined Razorpay checkout inside chat when merchant keys are configured.
 - Read complaints and recent notices.
 - Publish announcements for administrators only.
+- Remove an exact notice for administrators only, with a required confirmation before deletion.
 - Remember the five most recent messages and compress earlier context.
 - Read every answer aloud while removing formatting that would confuse TTS.
 
@@ -53,7 +54,7 @@ Pinned notices appear prominently on Home. The Notice Board gives the latest imp
 
 ![Redesigned notice board](docs/screenshots/notice-board.png)
 
-Administrators and committee members can publish notices for everyone, residents, or the committee. Expired notices stop appearing automatically.
+Administrators and committee members can publish notices for everyone, residents, or the committee. Administrators can remove obsolete notices manually or through a confirmed AI action. Expired notices stop appearing automatically.
 
 ### Administrative command center
 
@@ -63,11 +64,13 @@ The admin workspace summarizes billed maintenance, collected money, active resid
 
 ### English, Hindi, and Marathi
 
-The language control is always visible at the top of the signed-in application. Navigation, dialogs, menus, inputs, helper text, accessibility labels, and bundled notice copy switch between English, Hindi, and Marathi from a reviewed translation catalog included with the web app. Switching is instantaneous, works offline, and makes no AI or translation API request. Names, emails, IDs, currency values, and numbers remain unchanged.
+The language control is visible in the desktop header and inside the compact mobile menu. Navigation, dialogs, menus, inputs, helper text, accessibility labels, and bundled notice copy switch between English, Hindi, and Marathi from a reviewed translation catalog included with the web app. Switching is instantaneous, works offline, and makes no AI or translation API request. Names, emails, IDs, currency values, and numbers remain unchanged.
 
 ![Hindi home interface](docs/screenshots/hindi-home.png)
 
 The selected interface language is remembered on the device. It does not control the assistant: typed messages are detected locally, while Sarvam detects the source language of voice requests. The agent replies in the language used for that request, and read-aloud uses the detected response locale.
+
+On phones, one hamburger button opens every permitted page without a horizontally scrolling icon bar. The assistant uses the available screen height as a native chat surface, its live waveform remains fully visible, and voice messages use hold-to-record and release-to-send interaction.
 
 ## Main modules
 
@@ -140,13 +143,13 @@ Building and flat are selected from real society records. An administrator sees 
 
 The live demonstration is split into two Vercel projects so the Vite frontend and FastAPI backend can scale independently:
 
-- Web application: [https://panchayat-ai-fawn.vercel.app](https://panchayat-ai-fawn.vercel.app)
+- Web application: [https://panchayat-ai-demo.vercel.app](https://panchayat-ai-demo.vercel.app)
 - API and health check: [https://panchayat-ai-api.vercel.app](https://panchayat-ai-api.vercel.app)
 - Persistent data: Neon serverless PostgreSQL connected through the Vercel Marketplace.
 
 The frontend project uses `frontend-web/vercel.json` for React Router fallback routing. The backend automatically uses encrypted Vercel environment variables instead of the local `.env` file and normalizes provider-style PostgreSQL URLs for psycopg 3. Local SQLite development remains unchanged.
 
-Production secrets such as `DATABASE_URL`, `SECRET_KEY`, `OPENAI_API_KEY`, and `SARVAM_API_KEY` are stored only in Vercel. Never add them to Git. `VITE_API_BASE_URL` is intentionally public and points the web build to the deployed API.
+Production secrets such as `DATABASE_URL`, `SECRET_KEY`, `OPENAI_API_KEY`, `SARVAM_API_KEY`, and the optional `SARVAM_FALLBACK_API_KEY` are stored only in Vercel. The fallback subscription is tried only when the primary Sarvam request reports a credit, quota, or rate limit. Never add keys to Git. `VITE_API_BASE_URL` is intentionally public and points the web build to the deployed API.
 
 The deployment currently uses Vercel Hobby and Neon Free resources. These are suitable for a personal demonstration and can scale to zero when idle; usage limits and provider terms still apply.
 
@@ -192,6 +195,7 @@ Important settings:
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.4-nano
 SARVAM_API_KEY=
+SARVAM_FALLBACK_API_KEY=
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
 RAZORPAY_WEBHOOK_SECRET=

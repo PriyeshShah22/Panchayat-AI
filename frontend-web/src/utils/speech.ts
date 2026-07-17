@@ -6,6 +6,18 @@ interface SpeechCallbacks {
   onError?: (message: string) => void;
 }
 
+function scriptAwareLanguage(text: string, requested: "en" | "hi" | "mr") {
+  const devanagariCharacters = (text.match(/[\u0900-\u097f]/g) ?? []).length;
+  const latinCharacters = (text.match(/[A-Za-z]/g) ?? []).length;
+  // Inspect the complete answer, not its first token. Numbers, names, and short
+  // English labels at the beginning must not switch a Hindi/Marathi response
+  // to an English voice.
+  if (devanagariCharacters >= 4 && devanagariCharacters > latinCharacters * 0.35) {
+    return requested === "mr" ? "mr" : "hi";
+  }
+  return requested;
+}
+
 function availableVoices(): Promise<SpeechSynthesisVoice[]> {
   const immediate = window.speechSynthesis.getVoices();
   if (immediate.length) return Promise.resolve(immediate);
@@ -38,7 +50,8 @@ export async function playLocalizedSpeech(
 ) {
   stopLocalizedSpeech();
   const currentRequest = requestNumber;
-  const languageCode = `${language}-IN`;
+  const spokenLanguage = scriptAwareLanguage(text, language);
+  const languageCode = `${spokenLanguage}-IN`;
   if (!("speechSynthesis" in window))
     throw new Error("Read aloud is unavailable in this browser.");
 
@@ -47,10 +60,10 @@ export async function playLocalizedSpeech(
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = languageCode;
   const exactVoice = voices.find((voice) =>
-    voice.lang.toLowerCase().startsWith(language),
+    voice.lang.toLowerCase().startsWith(spokenLanguage),
   );
   const devanagariFallback =
-    language === "mr"
+    spokenLanguage === "mr"
       ? voices.find((voice) => voice.lang.toLowerCase().startsWith("hi"))
       : undefined;
   const voice = exactVoice || devanagariFallback;
@@ -71,7 +84,7 @@ export async function playLocalizedSpeech(
     if (currentRequest !== requestNumber) return;
     if (activeUtterance === utterance) activeUtterance = null;
     callbacks.onError?.(
-      language === "mr"
+      spokenLanguage === "mr"
         ? "Marathi read-aloud needs a Marathi or Hindi voice installed on this device."
         : "Read-aloud failed. Please tap the speaker and try again.",
     );
