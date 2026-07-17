@@ -61,6 +61,12 @@ class PanchayatAIScopeTests(unittest.TestCase):
         self.assertTrue(is_society_request("It has been leaking for two days", history))
         self.assertTrue(is_society_request("yes", history))
 
+    def test_allows_arriving_guest_context_before_pass_is_named(self):
+        self.assertTrue(is_society_request(
+            "Hello, a friend of mine is coming, his name is Priyesh. He will come today at 6:30 PM."
+        ))
+        self.assertFalse(is_society_request("Tell me a story about my friend coming to visit"))
+
     def test_confirmation_requires_context_or_pending_action(self):
         self.assertFalse(is_society_request("yes"))
         self.assertTrue(is_society_request("yes", has_pending_action=True))

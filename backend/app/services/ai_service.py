@@ -138,6 +138,7 @@ If required information is missing, ask one short clarifying question and do not
 For complaints, infer priority without asking unless the user explicitly gives a priority. Use impact, safety risk, number of people affected, duration, and emotional urgency as signals. Strong emotion alone must not make a harmless issue urgent. Use urgent only for an immediate serious risk such as fire, electrical danger, lift entrapment, flooding, security danger, or loss of an essential service.
 Complaint tool title and description must always be clear, formal English, even when the conversation is Hindi, Marathi, or Hinglish. Preserve the facts and meaning; do not store transliterated Hindi or Marathi. The conversational preview may be in the user's language.
 For a guest pass, only the visitor's name and purpose are required. Treat “मुझसे मिलने”, “आपसे मिलने”, “भेटायला”, “to meet me”, and “meeting me” as a complete purpose meaning “Meeting the resident”; do not ask for the purpose again. Arrival time, phone, vehicle number, and duration are optional. NEVER ask for phone, vehicle number, or duration. Set each to null unless the resident volunteers it. Do not delay a pass because optional information is absent. Resolve relative arrival dates using the current society time above. If the resident gives only a clock time, use the next occurrence of that time in IST. “शाम”, “संध्याकाळ”, and “evening” always mean PM; “सुबह”, “सकाळ”, and “morning” mean AM. Use the resident's linked flat automatically. Once name and purpose are present, call create_visitor_pass immediately and explain that the request will still require admin or committee approval.
+Reuse visitor name, purpose, arrival time, and optional details supplied by the user in recent conversation turns. If a user first introduces an arriving friend and then asks for a visitor or guest pass, treat the two turns as one request. Never repeat a previous capability denial and never ask the user to provide the same details again.
 For any request to pay maintenance or bills, prepare pay_outstanding_dues. Include every unpaid older month in one combined checkout and explain the combined total clearly.
 Only an admin can publish or remove an announcement; tell non-admin users they lack permission. Before preparing notice deletion, identify one exact existing notice and clearly name it in the confirmation preview.
 The reply language is independent of the website language toggle. {language_hint} Reply in the same language and script as the user's current message. For a short or ambiguous confirmation such as yes, no, okay, haan, or ho, continue the language used in the recent conversation. Use simple words suitable for a low-literacy user.
@@ -328,18 +329,40 @@ def _requests_visitor_pass(message: str) -> bool:
     """Recognize an explicit visitor-pass operation across supported languages."""
     text = (message or "").lower()
     visitor_terms = ("visitor", "guest", "gate pass", "visitor pass", "मेहमान", "आगंतुक", "विजिटर", "पाहुण", "गेस्ट")
-    action_terms = ("create", "make", "generate", "submit", "request", "बना", "बनाओ", "बनाना", "बनवा", "तैयार", "कर दो", "करो", "काढ", "तयार", "बनव")
+    action_terms = (
+        "create", "make", "generate", "submit", "request", "need", "want", "would like",
+        "बना", "बनाओ", "बनाना", "बनवा", "तैयार", "कर दो", "करो", "चाहिए",
+        "चाहता", "चाहती", "काढ", "तयार", "बनव", "हवे", "हवा", "हवी", "पाहिजे",
+    )
     return any(term in text for term in visitor_terms) and any(term in text for term in action_terms)
 
 
-def _visitor_request_has_required_details(message: str) -> bool:
-    """Require a likely proper name and a clearly stated visit purpose before forcing the write tool."""
+def _visitor_request_has_required_details(message: str, history: list[dict] | None = None) -> bool:
+    """Require name and purpose across user turns before forcing the write tool.
+
+    The latest message must explicitly request a pass. Earlier user turns may
+    supply its facts, but assistant text is excluded so a hallucinated detail or
+    denial can never become action input.
+    """
     if not _requests_visitor_pass(message):
         return False
+    prior_user_text = " ".join(
+        str(item.get("content") or "")
+        for item in _safe_history(history)
+        if item.get("role") == "user"
+    )
+    context = f"{prior_user_text} {message}".strip()
     purpose_terms = ("मुझसे मिलने", "आपसे मिलने", "मिलने", "भेटायला", "भेटण्यासाठी", "meet me", "meeting", "delivery", "deliver", "service", "repair", "guest", "family", "friend")
-    ignored = {"visitor", "guest", "gate", "pass", "create", "make", "please"}
-    possible_names = [word for word in re.findall(r"\b[A-Z][A-Za-z'-]{1,}\b", message) if word.lower() not in ignored]
-    return bool(possible_names) and any(term in message.lower() for term in purpose_terms)
+    ignored = {
+        "visitor", "guest", "gate", "pass", "create", "make", "please", "hello", "hi",
+        "hey", "no", "yes", "today", "tomorrow", "friend", "meeting", "resident", "society",
+        "he", "she", "his", "her", "i", "pm", "am",
+    }
+    possible_names = [
+        word for word in re.findall(r"\b[A-Z][A-Za-z'-]{1,}\b", context)
+        if word.lower() not in ignored
+    ]
+    return bool(possible_names) and any(term in context.lower() for term in purpose_terms)
 
 
 def _falsely_denies_available_tool(reply: str) -> bool:
@@ -372,7 +395,10 @@ def _openai_chat(db: Session, user: User, message: str, language: str,
         conversation_summary = _summarize(client, conversation_summary, recent[:-5])
         recent = recent[-5:]
     input_items: list[Any] = [*recent, {"role": "user", "content": message}]
-    force_visitor_tool = "create_visitor_pass" in {tool["name"] for tool in tools} and _visitor_request_has_required_details(message)
+    force_visitor_tool = (
+        "create_visitor_pass" in {tool["name"] for tool in tools}
+        and _visitor_request_has_required_details(message, recent)
+    )
     response = client.responses.create(
         model=settings.OPENAI_MODEL,
         instructions=_instructions(user, language, conversation_summary),

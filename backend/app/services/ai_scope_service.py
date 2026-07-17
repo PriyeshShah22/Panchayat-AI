@@ -82,6 +82,28 @@ def _is_explicitly_out_of_scope(text: str) -> bool:
     return any(re.search(pattern, normalized, flags=re.IGNORECASE) for pattern in _OUT_OF_SCOPE_PATTERNS)
 
 
+def _is_likely_visitor_arrival(text: str) -> bool:
+    """Recognize a resident introducing an arriving guest before saying "pass".
+
+    This is deliberately narrower than treating every mention of a friend as a
+    society request: both a guest relationship and an arrival/visit expression
+    must be present.
+    """
+    normalized = _normalize(text)
+    guest_terms = (
+        "friend", "guest", "relative", "visitor", "मेहमान", "दोस्त", "मित्र",
+        "पाहुण", "मैत्रीण", "मित्राचा", "नातेवाईक",
+    )
+    arrival_terms = (
+        "is coming", "will come", "coming today", "arrive", "arriving", "visit me",
+        "आ रहा", "आ रही", "आएगा", "आएगी", "आने वाला", "आने वाली", "मिलने",
+        "येणार", "येत आहे", "भेटायला", "भेटण्यासाठी",
+    )
+    return any(term in normalized for term in guest_terms) and any(
+        term in normalized for term in arrival_terms
+    )
+
+
 def is_society_request(
     message: str,
     history: Iterable[dict] | None = None,
@@ -101,6 +123,8 @@ def is_society_request(
     if normalized in _GREETING_OR_HELP:
         return True
     if contains_society_context(normalized):
+        return True
+    if _is_likely_visitor_arrival(normalized):
         return True
 
     if normalized in _CONFIRMATIONS and has_pending_action:

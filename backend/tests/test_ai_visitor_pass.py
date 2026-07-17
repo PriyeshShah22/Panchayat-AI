@@ -85,6 +85,23 @@ class AIVisitorPassTests(unittest.TestCase):
         self.assertTrue(_falsely_denies_available_tool("इस चैट में tool access नहीं मिल रही। society office जाएँ।"))
         self.assertFalse(_requests_visitor_pass("आज कौन से visitors अंदर हैं?"))
 
+    def test_split_turn_visitor_request_reuses_prior_user_details(self):
+        history = [
+            {
+                "role": "user",
+                "content": "Hello, a friend of mine is coming, his name is Priyesh. He will come today at 6:30 PM.",
+            },
+            {
+                "role": "assistant",
+                "content": "I cannot create it. Ask the society office for a visitor named WrongName.",
+            },
+        ]
+        message = "No, I mean I need a visitor pass or a guest pass because my friend is coming to the society."
+
+        self.assertTrue(_requests_visitor_pass(message))
+        self.assertTrue(_visitor_request_has_required_details(message, history))
+        self.assertFalse(_visitor_request_has_required_details("I need a visitor pass", []))
+
 
 if __name__ == "__main__":
     unittest.main()
